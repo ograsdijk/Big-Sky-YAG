@@ -21,15 +21,19 @@ class Property:
         self._command = command
         self._read_only = read_only
         self._ret_string = ret_string
-        regex_found = list(re.finditer("-.*-", ret_string))
-        if len(regex_found) > 0:
-            self._span = regex_found[0].span()
+        if ret_string is not None:
+            regex_found = list(re.finditer("-.*-", ret_string))
+            if len(regex_found) > 0:
+                self._span: Optional[Tuple[int, int]] = regex_found[0].span()
+            else:
+                self._span = None
         else:
             self._span = None
 
     def __get__(self, instance, owner) -> str:
         retval = instance.query(f"{self._command}")
-        retval = retval[self._span[0] : self._span[1]]
+        if self._span is not None:
+            retval = retval[self._span[0] : self._span[1]]
         return retval
 
     def __set__(self, instance, value: Union[str, float, int]) -> str:
@@ -41,47 +45,47 @@ class Property:
 
 
 class IntProperty(Property):
-    def __init__(self, *args, lower_upper: Optional[Tuple[int]] = None, **kwargs):
+    def __init__(self, *args, lower_upper: Optional[Tuple[int, int]] = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._lower_upper = lower_upper
 
-    def __get__(self, instance, owner) -> int:
-        val = super().__get__(instance, owner)
-        return int(val)
+    def __get__(self, instance, owner) -> int: # type: ignore[override]
+        val = int(super().__get__(instance, owner))
+        return val
 
-    def __set__(self, instance, value: int) -> str:
+    def __set__(self, instance, value: int) -> str: # type: ignore[override]
         assert isinstance(value, int), f"{value} is not of type int"
-        if ul:=self._lower_upper is not None:
-            assert (value >= ul[0]) & (value <= ul[1]), f"value {value} outside of range {ul[0]} -> {ul[1]}"
+        if (ul:=self._lower_upper) is not None:
+            l,u=ul
+            assert (value >= l) & (value <= u), f"value {value} outside of range {l} -> {u}"
         retval = super().__set__(instance, value)
         # check if input value was set properly
-        if span:=super()._span is not None:
-            ret_string = super()._ret_string
-            ret_string[span[0]:[span[1]]] = f"{value}"
+        if (span:=self._span) is not None and self._ret_string is not None:
+            ret_string = self._ret_string.replace(self._ret_string[span[0]:span[1]], f"{value}")
             assert retval == ret_string
         return retval
 
 class FloatProperty(Property):
-    def __init__(self, *args, lower_upper: Optional[Tuple[float]] = None,decimals=1, **kwargs):
+    def __init__(self, *args, lower_upper: Optional[Tuple[float, float]] = None,decimals=1, **kwargs):
         super().__init__(*args, **kwargs)
         self._decimals = decimals
         self._lower_upper = lower_upper
 
-    def __get__(self, instance, owner) -> float:
+    def __get__(self, instance, owner) -> float: # type: ignore[override]
         val = super().__get__(instance, owner)
         return float(val)
 
-    def __set__(self, instance, value: float) -> str:
+    def __set__(self, instance, value: float) -> str: # type: ignore[override]
         assert isinstance(value, float), f"{value} is not of type float"
-        if ul:=self._lower_upper is not None:
-            assert (value >= ul[0]) & (value <= ul[1]), f"value {value} outside of range {ul[0]} -> {ul[1]}"
+        if (ul:=self._lower_upper) is not None:
+            l,u=ul
+            assert (value >= l) & (value <= u), f"value {value} outside of range {l} -> {u}"
         write_multiplier = 10 ** self._decimals
         _value = int(round(value * write_multiplier, 0))
         retval = super().__set__(instance, _value)
         # check if input value was set properly
-        if span:=super()._span is not None:
-            ret_string = super()._ret_string
-            ret_string[span[0]:[span[1]]] = f"{round(value,self._decimals)}"
+        if (span:=self._span) is not None and self._ret_string is not None:
+            ret_string = self._ret_string.replace(self._ret_string[span[0]:span[1]], f"{round(value,self._decimals)}")
             assert retval == ret_string
         return retval
 
