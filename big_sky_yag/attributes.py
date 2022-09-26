@@ -128,20 +128,20 @@ class LaserStatus:
 class Flashlamp:
 
     voltage = IntProperty(
-        name="flashlamp voltage in V",
+        name="flashlamp voltage",
         command="V",
         ret_string="voltage  ---- V",
         lower_upper = (500,1800),
         read_only=False,
     )
     voltage_capacitor_sampled = IntProperty(
-        name="capacitor voltage sampled in V", command="VA", ret_string="voltage ac----V"
+        name="capacitor voltage sampled", command="VA", ret_string="voltage ac----V"
     )
     voltage_capacitor_instant = IntProperty(
-        name="capacitor voltage instant in V", command="VT", ret_string="voltage it----V"
+        name="capacitor voltage instant", command="VT", ret_string="voltage it----V"
     )
     energy = FloatProperty(
-        name="flashlamp energy in J",
+        name="flashlamp energy",
         command="ENE",
         ret_string="energy    --.-J",
         lower_upper = (7,23),
@@ -149,7 +149,7 @@ class Flashlamp:
         read_only=False,
     )
     capacitance = FloatProperty(
-        name="capacitance in μF",
+        name="capacitance",
         command="CAP",
         ret_string="capacity --.-uF",
         lower_upper = (27.,33.),
@@ -157,7 +157,7 @@ class Flashlamp:
         read_only=False,
     )
     frequency = FloatProperty(
-        name="frequency in Hz",
+        name="frequency",
         command="F",
         ret_string="freq.  --.-- Hz",
         lower_upper = (1,99.99),
@@ -368,7 +368,7 @@ class QSwitch:
     counter_user = IntProperty(
         name="user shot counter", command="UCQ", ret_string="cu QS ---------"
     )
-    delay = IntProperty(name="delay in μS", command="W", ret_string="delay    --- uS",
+    delay = IntProperty(name="delay", command="W", ret_string="delay    --- uS",
         lower_upper = (100, 999), read_only = False)
     pulses_wait = IntProperty(
         name="flashlamp pulses wait", command="QSW", ret_string="QS wait :  ---"
