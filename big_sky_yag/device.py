@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, List, Optional
 import pyvisa
 
 from .attributes import Flashlamp, LaserStatus, QSwitch, Status, Trigger, FloatProperty
@@ -26,6 +26,10 @@ class BigSkyYag:
         self.flashlamp = Flashlamp(self)
         self.qswitch = QSwitch(self)
 
+    def read(self) -> str:
+        message = self.instrument.read_bytes(17)
+        return message.strip("\r\n")
+
     def query(self, query: str) -> str:
         if self._serial_number is None:
             _query = f">{query}"
@@ -33,7 +37,8 @@ class BigSkyYag:
             _query = f"{self._serial_number}{query}"
         else:
             raise ValueError(f"Serial number is not valid, {self._serial_number}")
-        return self.instrument.query(_query)
+        self.instrument.write(_query)
+        return self.read()
 
     def write(self, command: str) -> str:
         if self._serial_number is None:
@@ -42,7 +47,9 @@ class BigSkyYag:
             _command = f"{self._serial_number}{command}"
         else:
             raise ValueError(f"Serial number is not valid, {self._serial_number}")
-        return self.instrument.write(_command)
+
+        self.instrument.write(_command)
+        return self.read()
 
     def save(self):
         """
@@ -136,7 +143,7 @@ class BigSkyYag:
     def laser_status(self) -> LaserStatus:
         status_string = self.query("WOR")
         status_ints = [int(v) for v in status_string.split(" ")[1::2]]
-        args = []
+        args: List[Any] = []
 
         # interlock
         args.append(True if status_ints[0] == 0 else False)
