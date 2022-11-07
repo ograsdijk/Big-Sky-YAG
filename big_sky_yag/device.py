@@ -1,14 +1,7 @@
 from typing import Optional
 import pyvisa
 
-from .attributes import (
-    Flashlamp,
-    LaserStatus,
-    QSwitch,
-    Status,
-    Trigger,
-    FloatProperty,
-)
+from .attributes import Flashlamp, LaserStatus, QSwitch, Status, Trigger, FloatProperty
 
 __all__ = ["BigSkyYag"]
 
@@ -152,7 +145,7 @@ class BigSkyYag:
         args.append(Status(status_ints[1] % 4))
         args.append(Trigger.INTERNAL if status_ints[2] <= 3 else Trigger.EXTERNAL)
 
-        # simmter
+        # simmer
         args.append(True if status_ints[3] else False)
 
         # q-switch
