@@ -49,43 +49,58 @@ class IntProperty(Property):
         super().__init__(*args, **kwargs)
         self._lower_upper = lower_upper
 
-    def __get__(self, instance, owner) -> int: # type: ignore[override]
+    def __get__(self, instance, owner) -> int:  # type: ignore[override]
         val = int(super().__get__(instance, owner))
         return val
 
-    def __set__(self, instance, value: int) -> str: # type: ignore[override]
+    def __set__(self, instance, value: int) -> str:  # type: ignore[override]
         assert isinstance(value, int), f"{value} is not of type int"
-        if (ul:=self._lower_upper) is not None:
-            l,u=ul
-            assert (value >= l) & (value <= u), f"value {value} outside of range {l} -> {u}"
+        if (ul := self._lower_upper) is not None:
+            l, u = ul
+            assert (value >= l) & (
+                value <= u
+            ), f"value {value} outside of range {l} -> {u}"
         retval = super().__set__(instance, value)
         # check if input value was set properly
-        if (span:=self._span) is not None and self._ret_string is not None:
-            ret_string = self._ret_string.replace(self._ret_string[span[0]:span[1]], f"{value}")
-            assert int(retval[span[0]:span[1]]) == value
+        if (span := self._span) is not None and self._ret_string is not None:
+            ret_string = self._ret_string.replace(
+                self._ret_string[span[0] : span[1]], f"{value}"
+            )
+            assert int(retval[span[0] : span[1]]) == value
         return retval
 
+
 class FloatProperty(Property):
-    def __init__(self, *args, lower_upper: Optional[Tuple[float, float]] = None,decimals=1, **kwargs):
+    def __init__(
+        self,
+        *args,
+        lower_upper: Optional[Tuple[float, float]] = None,
+        decimals=1,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self._decimals = decimals
         self._lower_upper = lower_upper
 
-    def __get__(self, instance, owner) -> float: # type: ignore[override]
+    def __get__(self, instance, owner) -> float:  # type: ignore[override]
         val = super().__get__(instance, owner)
         return float(val)
 
-    def __set__(self, instance, value: float) -> str: # type: ignore[override]
+    def __set__(self, instance, value: float) -> str:  # type: ignore[override]
         assert isinstance(value, float), f"{value} is not of type float"
-        if (ul:=self._lower_upper) is not None:
-            l,u=ul
-            assert (value >= l) & (value <= u), f"value {value} outside of range {l} -> {u}"
-        write_multiplier = 10 ** self._decimals
+        if (ul := self._lower_upper) is not None:
+            l, u = ul
+            assert (value >= l) & (
+                value <= u
+            ), f"value {value} outside of range {l} -> {u}"
+        write_multiplier = 10**self._decimals
         _value = int(round(value * write_multiplier, 0))
         retval = super().__set__(instance, _value)
         # check if input value was set properly
-        if (span:=self._span) is not None and self._ret_string is not None:
-            ret_string = self._ret_string.replace(self._ret_string[span[0]:span[1]], f"{round(value,self._decimals)}")
+        if (span := self._span) is not None and self._ret_string is not None:
+            ret_string = self._ret_string.replace(
+                self._ret_string[span[0] : span[1]], f"{round(value,self._decimals)}"
+            )
             assert retval == ret_string
         return retval
 
@@ -131,7 +146,7 @@ class Flashlamp:
         name="flashlamp voltage",
         command="V",
         ret_string="voltage  ---- V",
-        lower_upper = (500,1800),
+        lower_upper=(500, 1800),
         read_only=False,
     )
     voltage_capacitor_sampled = IntProperty(
@@ -144,7 +159,7 @@ class Flashlamp:
         name="flashlamp energy",
         command="ENE",
         ret_string="energy    --.-J",
-        lower_upper = (7,23),
+        lower_upper=(7, 23),
         decimals=1,
         read_only=False,
     )
@@ -152,7 +167,7 @@ class Flashlamp:
         name="capacitance",
         command="CAP",
         ret_string="capacity --.-uF",
-        lower_upper = (27.,33.),
+        lower_upper=(27.0, 33.0),
         decimals=1,
         read_only=False,
     )
@@ -160,7 +175,7 @@ class Flashlamp:
         name="frequency",
         command="F",
         ret_string="freq.  --.-- Hz",
-        lower_upper = (1,99.99),
+        lower_upper=(1, 99.99),
         decimals=2,
         read_only=False,
     )
@@ -180,88 +195,6 @@ class Flashlamp:
 
     def write(self, command) -> str:
         return self.parent.write(command)
-
-    # @property
-    # def voltage(self) -> int:
-    #     voltage = self.query("V")
-    #     voltage = voltage.strip("voltage").strip("V")
-    #     return int(voltage)
-
-    # @voltage.setter
-    # def voltage(self, voltage: int):
-    #     self.write(f"V{voltage}")
-
-    # @property
-    # def voltage_capacitor_sampled(self) -> int:
-    #     voltage = self.query("VA")
-    #     voltage = voltage.strip("voltage ac").strip("V")
-    #     return int(voltage)
-
-    # @property
-    # def voltage_capacitor_instant(self) -> int:
-    #     voltage = self.query("VI")
-    #     voltage = voltage.strip("voltage it").strip("V")
-    #     return int(voltage)
-
-    # @property
-    # def flashlamp_energy(self) -> float:
-    #     """
-    #     Capacitor energy in μJ
-
-    #     Returns:
-    #         float: energy in μJ
-    #     """
-    #     energy = self.query("ENE")
-    #     energy = energy.strip("energy").strip("J")
-    #     return float(energy)
-
-    # @flashlamp_energy.setter
-    # def flashlamp_energy(self, energy: float):
-    #     self.write(f"ENE{int(round(energy*10,0))}")
-
-    # @property
-    # def capacitor(self) -> float:
-    #     """
-    #     Get the capacitance
-
-    #     Returns:
-    #         float: capacitance in μF
-    #     """
-    #     capacitance = self.query("CAP")
-    #     capacitance = capacitance.strip("capacity").strip("uF")
-    #     return float(capacitance)
-
-    # @capacitor.setter
-    # def capacitor(self, capacitance: float):
-    #     """
-    #     Set the capacitance in uF
-
-    #     Args:
-    #         capacitance (float): capactiance in uF, up to 1 decimal place.
-    #     """
-    #     self.write(f"CAP{int(round(capacitance*10,0))}")
-
-    # @property
-    # def frequency(self) -> float:
-    #     """
-    #     Flashlamp frequency in Hz
-
-    #     Returns:
-    #         float: frequency in Hz
-    #     """
-    #     freq = self.query("F")
-    #     freq = freq.strip("freq.").strip("Hz")
-    #     return float(freq)
-
-    # @frequency.setter
-    # def frequency(self, frequency: float):
-    #     """
-    #     Set the flashlamp frequency in Hz, up to 2 decimals
-
-    #     Args:
-    #         frequency (float): flashlamp frequency in Hz
-    #     """
-    #     self.write(f"CAP{int(round(frequency*100,0))}")
 
     @property
     def trigger(self) -> Trigger:
@@ -307,30 +240,6 @@ class Flashlamp:
         state.update(dict((i.name, bool(if2.get_bit(i))) for i in FlashlampInterlock2))
         return FlashlampInterlockState(**state)
 
-    # @property
-    # def counter(self) -> int:
-    #     """
-    #     Lamp shout counter
-
-    #     Returns:
-    #         int: lamp shots
-    #     """
-    #     counts = self.query("C")
-    #     counts = counts.strip("ct LP").replace(" ", "")
-    #     return int(counts)
-
-    # @property
-    # def counter_user(self) -> int:
-    #     """
-    #     User lamp shout counter, can be reset with `user_counter_reset`
-
-    #     Returns:
-    #         int: user lamp shots
-    #     """
-    #     counts = self.query("UC")
-    #     counts = counts.strip("cu LP").replace(" ", "")
-    #     return int(counts)
-
     def user_counter_reset(self):
         """
         Reset the user lamp shot counter.
@@ -352,14 +261,14 @@ class QSwitch:
         name="frequency divider",
         command="QSF",
         ret_string="cycle rate F/--",
-        lower_upper = (1,99),
+        lower_upper=(1, 99),
         read_only=False,
     )
     pulses = IntProperty(
         name="burst pulses",
         command="QSP",
         ret_string="burst QS    ---",
-        lower_upper = (1,999),
+        lower_upper=(1, 999),
         read_only=False,
     )
     counter = IntProperty(
@@ -368,8 +277,13 @@ class QSwitch:
     counter_user = IntProperty(
         name="user shot counter", command="UCQ", ret_string="cu QS ---------"
     )
-    delay = IntProperty(name="delay", command="W", ret_string="delay    --- uS",
-        lower_upper = (100, 999), read_only = False)
+    delay = IntProperty(
+        name="delay",
+        command="W",
+        ret_string="delay    --- uS",
+        lower_upper=(100, 999),
+        read_only=False,
+    )
     pulses_wait = IntProperty(
         name="flashlamp pulses wait", command="QSW", ret_string="QS wait :  ---"
     )
@@ -403,50 +317,6 @@ class QSwitch:
                 f"qswitch mode should be either auto, burst or external, not {mode}"
             )
 
-    # @property
-    # def frequency_divider(self) -> int:
-    #     divider = self.query("QSF")
-    #     divider = divider.strip("cycle rate F/").replace(" ", "")
-    #     return int(divider)
-
-    # @frequency_divider.setter
-    # def frequency_divider(self, divider: int):
-    #     assert (divider > 0) & (divider < 100), "divider outside of range 1 -> 99"
-    #     self.write(f"QSF{divider}")
-
-    # @property
-    # def pulses(self) -> int:
-    #     pulses = self.query("QSP")
-    #     pulses.strip("burst QS").replace(" ", "")
-    #     return int(pulses)
-
-    # @pulses.setter
-    # def pulses(self, pulses: int):
-    #     self.write(f"QSP{pulses}")
-
-    # @property
-    # def delay(self) -> int:
-    #     """
-    #     Q-switch delay after flashlamp is fired in us
-
-    #     Returns:
-    #         int: Q-switch delay in us
-    #     """
-    #     delay = self.query("W")
-    #     delay.strip("delay").strip("uS").replace(" ", "")
-    #     return int(delay)
-
-    # @delay.setter
-    # def delay(self, delay: int):
-    #     """
-    #     Set the Q-switch delay in us
-
-    #     Args:
-    #         delay (int): Q-switch delay
-    #     """
-    #     assert (delay > 100) & (delay < 999), "delay outside of range 100 -> 999 μs"
-    #     self.write(f"W{delay}")
-
     @property
     def status(self) -> bool:
         status = self.query("QOF")
@@ -460,18 +330,6 @@ class QSwitch:
         iq = Bits(int(interlock_str, 2))
         state = dict((i.name, bool(iq.get_bit(i))) for i in QSwitchInterlock)
         return QSwitchInterlockState(**state)
-
-    # @property
-    # def pulses_wait(self) -> int:
-    #     """
-    #     Pulses to wait after starting the flashlamp before enabling the Q-switch
-
-    #     Returns:
-    #         int: pulses to wait
-    #     """
-    #     pulses_wait = self.query("QSW")
-    #     pulses_wait.strip("QS wait :").replace(" ", "")
-    #     return int(pulses_wait)
 
     def on(self):
         self.write("QOF1")

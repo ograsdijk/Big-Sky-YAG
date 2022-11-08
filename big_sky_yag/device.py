@@ -67,18 +67,6 @@ class BigSkyYag:
         """
         return self.query("SN").replace("s/number", "").strip()
 
-    # @property
-    # def temperature_cooling_group(self) -> float:
-    #     """
-    #     Get the cooling group temperature in C
-
-    #     Returns:
-    #         float: temperature in C
-    #     """
-    #     temperature = self.query("CG").strip(" ")
-    #     temperature = temperature.strip("temp. CG").strip("d")
-    #     return float(temperature)
-
     @property
     def shutter(self) -> bool:
         """
