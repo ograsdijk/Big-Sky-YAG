@@ -39,5 +39,5 @@ class QSwitchInterlockState:
 
 class QSwitchInterlock(IntEnum):
     EMISSION_INHIBITED = 1
-    WATER_TEMP = 1
+    WATER_TEMP = 2
     SHUTTER_CLOSED = 6

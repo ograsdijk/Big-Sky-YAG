@@ -62,7 +62,7 @@ class IntProperty(Property):
         # check if input value was set properly
         if (span:=self._span) is not None and self._ret_string is not None:
             ret_string = self._ret_string.replace(self._ret_string[span[0]:span[1]], f"{value}")
-            assert retval == ret_string
+            assert int(retval[span[0]:span[1]]) == value
         return retval
 
 class FloatProperty(Property):
@@ -298,10 +298,10 @@ class Flashlamp:
     @property
     def interlock(self) -> FlashlampInterlockState:
         interlock_str = self.query("IF")
-        interlock_str = "".join(interlock_str.split(" ")[1:])
+        interlock_str = "".join(interlock_str.split(" ")[1:])[::-1]
         if1 = Bits(int(interlock_str, 2))
         interlock_str = self.query("IF2")
-        interlock_str = "".join(interlock_str.split(" ")[1:])
+        interlock_str = "".join(interlock_str.split(" ")[1:])[::-1]
         if2 = Bits(int(interlock_str, 2))
         state = dict((i.name, bool(if1.get_bit(i))) for i in FlashlampInterlock1)
         state.update(dict((i.name, bool(if2.get_bit(i))) for i in FlashlampInterlock2))
@@ -387,7 +387,7 @@ class QSwitch:
     @property
     def mode(self) -> QSwitchMode:
         mode = self.query("QSM")
-        mode = mode.strip("QS MODE :").replace(" ", "")
+        mode = mode.strip("QS mode :").replace(" ", "")
         return QSwitchMode(int(mode))
 
     @mode.setter
@@ -456,7 +456,7 @@ class QSwitch:
     @property
     def interlock(self) -> QSwitchInterlockState:
         interlock_str = self.query("IQ")
-        interlock_str = "".join(interlock_str.split(" ")[1:])
+        interlock_str = "".join(interlock_str.split(" ")[1:])[::-1]
         iq = Bits(int(interlock_str, 2))
         state = dict((i.name, bool(iq.get_bit(i))) for i in QSwitchInterlock)
         return QSwitchInterlockState(**state)

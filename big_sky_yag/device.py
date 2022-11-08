@@ -27,7 +27,7 @@ class BigSkyYag:
         self.qswitch = QSwitch(self)
 
     def read(self) -> str:
-        message = self.instrument.read_bytes(17)
+        message = self.instrument.read_bytes(17).decode()
         return message.strip("\r\n")
 
     def query(self, query: str) -> str:
@@ -65,7 +65,7 @@ class BigSkyYag:
         Returns:
             str: serial number
         """
-        return self.query("SN")
+        return self.query("SN").replace("s/number", "").strip()
 
     # @property
     # def temperature_cooling_group(self) -> float:
@@ -119,7 +119,7 @@ class BigSkyYag:
         """
         pump = self.query("P")
         pump.strip("CG pump")
-        return bool(pump)
+        return bool(int(pump))
 
     @pump.setter
     def pump(self, state: str):
@@ -150,13 +150,13 @@ class BigSkyYag:
 
         # flashlamp
         args.append(Status(status_ints[1] % 4))
-        args.append(Trigger.INTERNAL if status_ints[2] <= 3 else Trigger.EXTERNAL)
+        args.append(Trigger.INTERNAL if status_ints[1] <= 3 else Trigger.EXTERNAL)
 
         # simmer
-        args.append(True if status_ints[3] else False)
+        args.append(True if status_ints[2] else False)
 
         # q-switch
-        args.append(Status(status_ints[4] % 4))
-        args.append(Trigger.INTERNAL if status_ints[5] <= 3 else Trigger.EXTERNAL)
+        args.append(Status(status_ints[3] % 4))
+        args.append(Trigger.INTERNAL if status_ints[3] <= 3 else Trigger.EXTERNAL)
 
         return LaserStatus(*args)
