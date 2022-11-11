@@ -103,7 +103,7 @@ class BigSkyYag:
             bool: True if on, False if off
         """
         pump = self.query("P")
-        pump.strip("CG pump")
+        pump = pump.strip("CG pump")
         return bool(int(pump))
 
     @pump.setter
