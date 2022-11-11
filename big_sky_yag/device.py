@@ -75,27 +75,24 @@ class BigSkyYag:
         Returns:
             bool: shutter state
         """
-        shutter = self.query("S")
+        shutter = self.query("R")
         shutter = shutter.strip("shutter ")
         return True if shutter == "open" else False
 
     @shutter.setter
-    def shutter(self, state: str):
+    def shutter(self, state: bool):
         """
-        Open or close the shutter, with `open` or `close`
+        Open or close the shutter, with open (True) or close (False)
 
         Args:
-            state (str): `close` or `open` the shutter
+            state (str): True (open) or False (close)
 
         Raises:
-            ValueError: raise error if state is not `open` or `close`
+            TypeError: raise error if state is not boolean
         """
-        if state == "open":
-            self.write("R1")
-        elif state == "close":
-            self.write("R0")
-        else:
-            raise ValueError("state either `open` or `close`")
+        if not isinstance(state, bool):
+            raise TypeError(f"state not boolean but {type(state)}")
+        self.write(f"R{state:b}")
 
     @property
     def pump(self) -> bool:
@@ -110,22 +107,19 @@ class BigSkyYag:
         return bool(int(pump))
 
     @pump.setter
-    def pump(self, state: str):
+    def pump(self, state: bool):
         """
-        Set the pump state, either `on` or `off`
+        Set the pump state, either on (True) or off (False)
 
         Args:
-            state (str): `on` or `off`
+            state (bool): True (on) or False (off)
 
         Raises:
-            ValueError: raise error if state is not `on` or `off`
+            Type: raise error if state is not boolean
         """
-        if state == "on":
-            self.write("P1")
-        elif state == "off":
-            self.write("P0")
-        else:
-            raise ValueError("state either on or off")
+        if not isinstance(state, bool):
+            raise TypeError(f"state not boolean but {type(state)}")
+        self.write(f"P{state:b}")
 
     @property
     def laser_status(self) -> LaserStatus:
