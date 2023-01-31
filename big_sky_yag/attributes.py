@@ -1,6 +1,6 @@
+import re
 from dataclasses import dataclass
 from enum import IntEnum
-import re
 from typing import Optional, Protocol, Tuple, Union
 
 from .bit_handling import Bits
@@ -225,7 +225,8 @@ class Flashlamp:
             self.write("LPM1")
         else:
             raise ValueError(
-                f"flashlamp trigger should be either internal or external, not {trigger}"
+                "flashlamp trigger should be either internal or external, not"
+                f" {trigger}"
             )
 
     @property
