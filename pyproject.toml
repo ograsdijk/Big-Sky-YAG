@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["ograsdijk <o.grasdijk@gmail.com>"]
 readme = "README.md"
+repository = "https://github.com/ograsdijk/Big-Sky-YAG"
 packages = [{include = "big_sky_yag"}]
 
 [tool.poetry.dependencies]

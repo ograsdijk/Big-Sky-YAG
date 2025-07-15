@@ -1,7 +1,8 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, cast
+
 import pyvisa
 
-from .attributes import Flashlamp, LaserStatus, QSwitch, Status, Trigger, FloatProperty
+from .attributes import Flashlamp, FloatProperty, LaserStatus, QSwitch, Status, Trigger
 
 __all__ = ["BigSkyYag"]
 
@@ -19,8 +20,11 @@ class BigSkyYag:
         baud_rate: int = 9600,
         serial_number: Optional[int] = None,
     ):
-        self.instrument = pyvisa.ResourceManager().open_resource(
-            resource_name=resource_name, baud_rate=baud_rate
+        self.instrument = cast(
+            pyvisa.resources.SerialInstrument,
+            pyvisa.ResourceManager().open_resource(
+                resource_name=resource_name, baud_rate=baud_rate
+            ),
         )
         self._serial_number = serial_number
         self.flashlamp = Flashlamp(self)
