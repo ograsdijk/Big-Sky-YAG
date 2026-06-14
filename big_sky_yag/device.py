@@ -120,8 +120,8 @@ class BigSkyYag:
             bool: shutter state
         """
         shutter = self.query("R")
-        shutter = shutter.strip("shutter ")
-        return True if shutter == "open" else False
+        shutter = shutter.removeprefix("shutter").strip()
+        return shutter == "open"
 
     @shutter.setter
     def shutter(self, state: bool) -> None:
@@ -147,8 +147,7 @@ class BigSkyYag:
             bool: True if on, False if off
         """
         pump = self.query("P")
-        pump = pump.strip("CG pump")
-        return bool(int(pump))
+        return bool(int(pump.split()[-1]))
 
     @pump.setter
     def pump(self, state: bool) -> None:

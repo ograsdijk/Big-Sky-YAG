@@ -1,6 +1,6 @@
 [project]
 name = "big-sky-yag"
-version = "0.2.0"
+version = "0.2.1"
 description = "Python interface for a Big Sky YAG Laser."
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
