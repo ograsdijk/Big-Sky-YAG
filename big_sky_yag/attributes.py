@@ -54,19 +54,16 @@ class IntProperty(Property):
         return val
 
     def __set__(self, instance, value: int) -> str:  # type: ignore[override]
-        assert isinstance(value, int), f"{value} is not of type int"
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(f"{value} is not of type int")
         if (ul := self._lower_upper) is not None:
-            l, u = ul
-            assert (value >= l) & (
-                value <= u
-            ), f"value {value} outside of range {l} -> {u}"
+            lower, upper = ul
+            if not lower <= value <= upper:
+                raise ValueError(f"value {value} outside of range {lower} -> {upper}")
         retval = super().__set__(instance, value)
-        # check if input value was set properly
         if (span := self._span) is not None and self._ret_string is not None:
-            ret_string = self._ret_string.replace(
-                self._ret_string[span[0] : span[1]], f"{value}"
-            )
-            assert int(retval[span[0] : span[1]]) == value
+            if int(retval[span[0] : span[1]]) != value:
+                raise ValueError(f"failed to set {self._name} to {value}")
         return retval
 
 
@@ -87,30 +84,28 @@ class FloatProperty(Property):
         return float(val)
 
     def __set__(self, instance, value: float) -> str:  # type: ignore[override]
-        assert isinstance(value, float), f"{value} is not of type float"
+        if not isinstance(value, float):
+            raise TypeError(f"{value} is not of type float")
         if (ul := self._lower_upper) is not None:
-            l, u = ul
-            assert (value >= l) & (
-                value <= u
-            ), f"value {value} outside of range {l} -> {u}"
+            lower, upper = ul
+            if not lower <= value <= upper:
+                raise ValueError(f"value {value} outside of range {lower} -> {upper}")
         write_multiplier = 10**self._decimals
         _value = int(round(value * write_multiplier, 0))
         retval = super().__set__(instance, _value)
-        # check if input value was set properly
         if (span := self._span) is not None and self._ret_string is not None:
             ret_string = self._ret_string.replace(
-                self._ret_string[span[0] : span[1]], f"{round(value,self._decimals)}"
+                self._ret_string[span[0] : span[1]], f"{round(value, self._decimals)}"
             )
-            assert retval == ret_string
+            if retval != ret_string:
+                raise ValueError(f"failed to set {self._name} to {value}")
         return retval
 
 
 class BigSkyYag(Protocol):
-    def query(self, query: str) -> str:
-        ...
+    def query(self, query: str) -> str: ...
 
-    def write(self, command: str) -> str:
-        ...
+    def write(self, command: str) -> str: ...
 
 
 class Trigger(IntEnum):
@@ -141,7 +136,6 @@ class LaserStatus:
 
 
 class Flashlamp:
-
     voltage = IntProperty(
         name="flashlamp voltage",
         command="V",

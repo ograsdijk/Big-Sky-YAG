@@ -1,10 +1,43 @@
-from typing import Any, List, Optional, cast
+from typing import Any, List, Optional, Protocol, cast
 
-import pyvisa
+import serial
 
 from .attributes import Flashlamp, FloatProperty, LaserStatus, QSwitch, Status, Trigger
 
-__all__ = ["BigSkyYag"]
+__all__ = ["BigSkyYag", "SerialInstrument"]
+
+
+class Instrument(Protocol):
+    def read(self) -> bytes: ...
+
+    def write(self, message: str) -> None: ...
+
+
+class SerialInstrument:
+    def __init__(
+        self,
+        port: str,
+        baud_rate: int = 9600,
+        timeout: Optional[float] = 2.0,
+        write_timeout: Optional[float] = 2.0,
+        encoding: str = "ascii",
+    ):
+        self._serial = serial.Serial(
+            port=port,
+            baudrate=baud_rate,
+            timeout=timeout,
+            write_timeout=write_timeout,
+        )
+        self._encoding = encoding
+
+    def read(self) -> bytes:
+        return cast(bytes, self._serial.readline())
+
+    def write(self, message: str) -> None:
+        self._serial.write(message.encode(self._encoding))
+
+    def close(self) -> None:
+        self._serial.close()
 
 
 class BigSkyYag:
@@ -19,19 +52,26 @@ class BigSkyYag:
         resource_name: str,
         baud_rate: int = 9600,
         serial_number: Optional[int] = None,
+        instrument: Optional[Instrument] = None,
+        timeout: Optional[float] = 2.0,
+        write_timeout: Optional[float] = 2.0,
     ):
-        self.instrument = cast(
-            pyvisa.resources.SerialInstrument,
-            pyvisa.ResourceManager().open_resource(
-                resource_name=resource_name, baud_rate=baud_rate
-            ),
+        self.instrument = (
+            instrument
+            if instrument is not None
+            else SerialInstrument(
+                port=resource_name,
+                baud_rate=baud_rate,
+                timeout=timeout,
+                write_timeout=write_timeout,
+            )
         )
         self._serial_number = serial_number
         self.flashlamp = Flashlamp(self)
-        self.qswitch = QSwitch(self)
+        self.qswitch = QSwitch(self)  # type: ignore[no-untyped-call]
 
     def read(self) -> str:
-        message = self.instrument.read_bytes(17).decode()
+        message = self.instrument.read().decode()
         return message.strip("\r\n")
 
     def query(self, query: str) -> str:
@@ -55,7 +95,7 @@ class BigSkyYag:
         self.instrument.write(_command)
         return self.read()
 
-    def save(self):
+    def save(self) -> None:
         """
         Save the current configuration.
         """
@@ -84,7 +124,7 @@ class BigSkyYag:
         return True if shutter == "open" else False
 
     @shutter.setter
-    def shutter(self, state: bool):
+    def shutter(self, state: bool) -> None:
         """
         Open or close the shutter, with open (True) or close (False)
 
@@ -111,7 +151,7 @@ class BigSkyYag:
         return bool(int(pump))
 
     @pump.setter
-    def pump(self, state: bool):
+    def pump(self, state: bool) -> None:
         """
         Set the pump state, either on (True) or off (False)
 
@@ -131,17 +171,13 @@ class BigSkyYag:
         status_ints = [int(v) for v in status_string.split(" ")[1::2]]
         args: List[Any] = []
 
-        # interlock
         args.append(True if status_ints[0] == 0 else False)
 
-        # flashlamp
         args.append(Status(status_ints[1] % 4))
         args.append(Trigger.INTERNAL if status_ints[1] <= 3 else Trigger.EXTERNAL)
 
-        # simmer
         args.append(True if status_ints[2] else False)
 
-        # q-switch
         args.append(Status(status_ints[3] % 4))
         args.append(Trigger.INTERNAL if status_ints[3] <= 3 else Trigger.EXTERNAL)
 
