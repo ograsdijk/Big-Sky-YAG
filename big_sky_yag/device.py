@@ -31,10 +31,12 @@ class SerialInstrument:
         self._encoding = encoding
 
     def read(self) -> bytes:
-        return cast(bytes, self._serial.readline())
+        # All device responses are exactly 17 bytes: \r\n + 15 bytes of data.
+        return self._serial.read(17)
 
     def write(self, message: str) -> None:
-        self._serial.write(message.encode(self._encoding))
+        # Device requires \r\n line termination to process commands.
+        self._serial.write((message + "\r\n").encode(self._encoding))
 
     def close(self) -> None:
         self._serial.close()

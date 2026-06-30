@@ -65,8 +65,8 @@ def test_serial_instrument_writes_encoded_bytes(
             self.writes: List[bytes] = []
             serial_instances.append(self)
 
-        def readline(self) -> bytes:
-            return b"ok\r\n"
+        def read(self, n: int) -> bytes:
+            return b"\r\nok             "
 
         def write(self, message: bytes) -> None:
             self.writes.append(message)
@@ -79,11 +79,11 @@ def test_serial_instrument_writes_encoded_bytes(
     instrument = SerialInstrument("COM4", baud_rate=19200, timeout=1.0)
     instrument.write(">SN")
 
-    assert instrument.read() == b"ok\r\n"
+    assert instrument.read() == b"\r\nok             "
     assert serial_instances[0].kwargs["port"] == "COM4"
     assert serial_instances[0].kwargs["baudrate"] == 19200
     assert serial_instances[0].kwargs["timeout"] == 1.0
-    assert serial_instances[0].writes == [b">SN"]
+    assert serial_instances[0].writes == [b">SN\r\n"]
 
 
 def test_int_property_validates_type_and_range() -> None:
