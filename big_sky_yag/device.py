@@ -6,6 +6,9 @@ from .attributes import Flashlamp, FloatProperty, LaserStatus, QSwitch, Status, 
 
 __all__ = ["BigSkyYag", "SerialInstrument"]
 
+# Every device response is exactly 17 bytes: \r\n + 15-byte payload.
+RESPONSE_LENGTH = 17
+
 
 class Instrument(Protocol):
     def read(self) -> bytes: ...
@@ -31,8 +34,7 @@ class SerialInstrument:
         self._encoding = encoding
 
     def read(self) -> bytes:
-        # All device responses are exactly 17 bytes: \r\n + 15 bytes of data.
-        return self._serial.read(17)
+        return cast(bytes, self._serial.read(RESPONSE_LENGTH))
 
     def write(self, message: str) -> None:
         # Device requires \r\n line termination to process commands.
