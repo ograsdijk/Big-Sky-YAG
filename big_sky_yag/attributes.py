@@ -1,7 +1,20 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Optional, Protocol, Tuple, Union
+from typing import (
+    Any,
+    Generic,
+    Optional,
+    Protocol,
+    Self,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 from .bit_handling import Bits
 from .interlock import (
@@ -13,10 +26,23 @@ from .interlock import (
 )
 
 
-class Property:
+class BigSkyYag(Protocol):
+    def query(self, query: str) -> str: ...
+
+    def write(self, command: str) -> str: ...
+
+
+T = TypeVar("T")
+
+
+class Property(Generic[T]):
     def __init__(
-        self, name: str, command: str, ret_string: Optional[str] = None, read_only=True
-    ):
+        self,
+        name: str,
+        command: str,
+        ret_string: Optional[str] = None,
+        read_only: bool = True,
+    ) -> None:
         self._name = name
         self._command = command
         self._read_only = read_only
@@ -30,13 +56,26 @@ class Property:
         else:
             self._span = None
 
-    def __get__(self, instance, owner) -> str:
+    @overload
+    def __get__(self, instance: None, owner: type[Any]) -> Self: ...
+
+    @overload
+    def __get__(self, instance: BigSkyYag, owner: type[Any]) -> T: ...
+
+    def __get__(
+        self, instance: Optional[BigSkyYag], owner: type[Any]
+    ) -> Union[Self, T]:
+        if instance is None:
+            return self
         retval = instance.query(f"{self._command}")
         if self._span is not None:
             retval = retval[self._span[0] : self._span[1]]
-        return retval
+        return self._convert(retval)
 
-    def __set__(self, instance, value: Union[str, float, int]) -> str:
+    def _convert(self, value: str) -> T:
+        return cast(T, value)
+
+    def __set__(self, instance: BigSkyYag, value: Union[str, float, int]) -> str:
         if self._read_only:
             raise ValueError(f"{self._name} is a read-only attribute")
         else:
@@ -44,16 +83,20 @@ class Property:
             return retval
 
 
-class IntProperty(Property):
-    def __init__(self, *args, lower_upper: Optional[Tuple[int, int]] = None, **kwargs):
+class IntProperty(Property[int]):
+    def __init__(
+        self,
+        *args: Any,
+        lower_upper: Optional[Tuple[int, int]] = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._lower_upper = lower_upper
 
-    def __get__(self, instance, owner) -> int:  # type: ignore[override]
-        val = int(super().__get__(instance, owner))
-        return val
+    def _convert(self, value: str) -> int:
+        return int(value)
 
-    def __set__(self, instance, value: int) -> str:  # type: ignore[override]
+    def __set__(self, instance: BigSkyYag, value: int) -> str:  # type: ignore[override]
         if not isinstance(value, int) or isinstance(value, bool):
             raise TypeError(f"{value} is not of type int")
         if (ul := self._lower_upper) is not None:
@@ -67,23 +110,22 @@ class IntProperty(Property):
         return retval
 
 
-class FloatProperty(Property):
+class FloatProperty(Property[float]):
     def __init__(
         self,
-        *args,
+        *args: Any,
         lower_upper: Optional[Tuple[float, float]] = None,
-        decimals=1,
-        **kwargs,
-    ):
+        decimals: int = 1,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._decimals = decimals
         self._lower_upper = lower_upper
 
-    def __get__(self, instance, owner) -> float:  # type: ignore[override]
-        val = super().__get__(instance, owner)
-        return float(val)
+    def _convert(self, value: str) -> float:
+        return float(value)
 
-    def __set__(self, instance, value: float) -> str:  # type: ignore[override]
+    def __set__(self, instance: BigSkyYag, value: float) -> str:  # type: ignore[override]
         if not isinstance(value, float):
             raise TypeError(f"{value} is not of type float")
         if (ul := self._lower_upper) is not None:
@@ -94,18 +136,10 @@ class FloatProperty(Property):
         _value = int(round(value * write_multiplier, 0))
         retval = super().__set__(instance, _value)
         if (span := self._span) is not None and self._ret_string is not None:
-            ret_string = self._ret_string.replace(
-                self._ret_string[span[0] : span[1]], f"{round(value, self._decimals)}"
-            )
-            if retval != ret_string:
+            returned_value = float(retval[span[0] : span[1]])
+            if returned_value != round(value, self._decimals):
                 raise ValueError(f"failed to set {self._name} to {value}")
         return retval
-
-
-class BigSkyYag(Protocol):
-    def query(self, query: str) -> str: ...
-
-    def write(self, command: str) -> str: ...
 
 
 class Trigger(IntEnum):
@@ -184,10 +218,10 @@ class Flashlamp:
         self.parent = parent
         return
 
-    def query(self, command) -> str:
+    def query(self, command: str) -> str:
         return self.parent.query(command)
 
-    def write(self, command) -> str:
+    def write(self, command: str) -> str:
         return self.parent.write(command)
 
     @property
@@ -203,7 +237,7 @@ class Flashlamp:
         return Trigger(int(mode))
 
     @trigger.setter
-    def trigger(self, trigger: str):
+    def trigger(self, trigger: str) -> None:
         """
         Set the flashlamp trigger, either internal or external
 
@@ -235,19 +269,19 @@ class Flashlamp:
         state.update(dict((i.name, bool(if2.get_bit(i))) for i in FlashlampInterlock2))
         return FlashlampInterlockState(**state)
 
-    def user_counter_reset(self):
+    def user_counter_reset(self) -> None:
         """
         Reset the user lamp shot counter.
         """
         self.write("UC0")
 
-    def activate(self):
+    def activate(self) -> None:
         self.write("A")
 
-    def stop(self):
+    def stop(self) -> None:
         self.write("S")
 
-    def simmer(self):
+    def simmer(self) -> None:
         self.write("M")
 
 
@@ -283,14 +317,14 @@ class QSwitch:
         name="flashlamp pulses wait", command="QSW", ret_string="QS wait :  ---"
     )
 
-    def __init__(self, parent):
+    def __init__(self, parent: BigSkyYag) -> None:
         self.parent = parent
         return
 
-    def query(self, command) -> str:
+    def query(self, command: str) -> str:
         return self.parent.query(command)
 
-    def write(self, command) -> str:
+    def write(self, command: str) -> str:
         return self.parent.write(command)
 
     @property
@@ -300,7 +334,7 @@ class QSwitch:
         return QSwitchMode(int(mode))
 
     @mode.setter
-    def mode(self, mode: str):
+    def mode(self, mode: str) -> None:
         if mode == "auto":
             self.write("QSM0")
         elif mode == "burst":
@@ -315,8 +349,10 @@ class QSwitch:
     @property
     def status(self) -> bool:
         status = self.query("QOF")
-        status = status.strip("QS at run").replace(" ", "")
-        return bool(status)
+        status = status.removeprefix("QS at run").strip()
+        if status not in {"0", "1"}:
+            raise ValueError(f"unexpected Q-switch status response: {status!r}")
+        return bool(int(status))
 
     @property
     def interlock(self) -> QSwitchInterlockState:
@@ -326,17 +362,17 @@ class QSwitch:
         state = dict((i.name, bool(iq.get_bit(i))) for i in QSwitchInterlock)
         return QSwitchInterlockState(**state)
 
-    def on(self):
+    def on(self) -> None:
         self.write("QOF1")
 
-    def off(self):
+    def off(self) -> None:
         self.write("QOF0")
 
-    def start(self):
+    def start(self) -> None:
         self.write("PQ")
 
-    def stop(self):
+    def stop(self) -> None:
         self.write("SQ")
 
-    def single(self):
+    def single(self) -> None:
         self.write("OQ")

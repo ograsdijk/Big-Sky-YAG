@@ -1,12 +1,11 @@
-from enum import Enum
-from typing import List
+from enum import IntEnum
 
 
 class Bits:
     def __init__(self, value: int):
         self.value = value
 
-    def get_set_bits(self) -> List:
+    def get_set_bits(self) -> list[int]:
         return [i for i in range(self.value.bit_length()) if (self.value >> i & 1)]
 
     def set_bit(self, bit: int, bit_value: int) -> None:
@@ -17,8 +16,8 @@ class Bits:
     def get_bit(self, bit: int) -> int:
         return self.value >> bit & 1
 
-    def set_value(self, enum: Enum, val: int) -> None:
+    def set_value(self, enum: IntEnum, val: int) -> None:
         self.set_bit(enum.value, val)
 
-    def get_value(self, enum: Enum) -> int:
+    def get_value(self, enum: IntEnum) -> int:
         return self.get_bit(enum.value)

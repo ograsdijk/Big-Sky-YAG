@@ -1,4 +1,5 @@
-from typing import Any, List, Optional, Protocol, cast
+from types import TracebackType
+from typing import Optional, Protocol, cast
 
 import serial
 
@@ -32,7 +33,13 @@ class SerialInstrument:
 
     def read(self) -> bytes:
         # All device responses are exactly 17 bytes: \r\n + 15 bytes of data.
-        return self._serial.read(17)
+        response = cast(bytes, self._serial.read(17))
+        if len(response) != 17:
+            raise TimeoutError(
+                "incomplete device response: expected 17 bytes, "
+                f"received {len(response)}"
+            )
+        return response
 
     def write(self, message: str) -> None:
         # Device requires \r\n line termination to process commands.
@@ -57,7 +64,9 @@ class BigSkyYag:
         instrument: Optional[Instrument] = None,
         timeout: Optional[float] = 2.0,
         write_timeout: Optional[float] = 2.0,
+        encoding: str = "ascii",
     ):
+        self._owns_instrument = instrument is None
         self.instrument = (
             instrument
             if instrument is not None
@@ -66,20 +75,40 @@ class BigSkyYag:
                 baud_rate=baud_rate,
                 timeout=timeout,
                 write_timeout=write_timeout,
+                encoding=encoding,
             )
         )
+        self._encoding = encoding
         self._serial_number = serial_number
         self.flashlamp = Flashlamp(self)
-        self.qswitch = QSwitch(self)  # type: ignore[no-untyped-call]
+        self.qswitch = QSwitch(self)
 
     def read(self) -> str:
-        message = self.instrument.read().decode()
+        message = self.instrument.read().decode(self._encoding)
         return message.strip("\r\n")
+
+    def close(self) -> None:
+        """Close the serial connection created by this instance."""
+        if self._owns_instrument:
+            cast(SerialInstrument, self.instrument).close()
+
+    def __enter__(self) -> "BigSkyYag":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        self.close()
 
     def query(self, query: str) -> str:
         if self._serial_number is None:
             _query = f">{query}"
-        elif isinstance(self._serial_number, int):
+        elif isinstance(self._serial_number, int) and not isinstance(
+            self._serial_number, bool
+        ):
             _query = f"{self._serial_number}{query}"
         else:
             raise ValueError(f"Serial number is not valid, {self._serial_number}")
@@ -89,7 +118,9 @@ class BigSkyYag:
     def write(self, command: str) -> str:
         if self._serial_number is None:
             _command = f">{command}"
-        elif isinstance(self._serial_number, int):
+        elif isinstance(self._serial_number, int) and not isinstance(
+            self._serial_number, bool
+        ):
             _command = f"{self._serial_number}{command}"
         else:
             raise ValueError(f"Serial number is not valid, {self._serial_number}")
@@ -123,7 +154,11 @@ class BigSkyYag:
         """
         shutter = self.query("R")
         shutter = shutter.removeprefix("shutter").strip()
-        return shutter == "open"
+        if shutter == "open":
+            return True
+        if shutter == "closed":
+            return False
+        raise ValueError(f"unexpected shutter response: {shutter!r}")
 
     @shutter.setter
     def shutter(self, state: bool) -> None:
@@ -170,16 +205,15 @@ class BigSkyYag:
     def laser_status(self) -> LaserStatus:
         status_string = self.query("WOR")
         status_ints = [int(v) for v in status_string.split(" ")[1::2]]
-        args: List[Any] = []
-
-        args.append(True if status_ints[0] == 0 else False)
-
-        args.append(Status(status_ints[1] % 4))
-        args.append(Trigger.INTERNAL if status_ints[1] <= 3 else Trigger.EXTERNAL)
-
-        args.append(True if status_ints[2] else False)
-
-        args.append(Status(status_ints[3] % 4))
-        args.append(Trigger.INTERNAL if status_ints[3] <= 3 else Trigger.EXTERNAL)
-
-        return LaserStatus(*args)
+        return LaserStatus(
+            interlock=status_ints[0] == 0,
+            flashlamp=Status(status_ints[1] % 4),
+            flashlamp_synchronization=(
+                Trigger.INTERNAL if status_ints[1] <= 3 else Trigger.EXTERNAL
+            ),
+            simmer=bool(status_ints[2]),
+            q_switch=Status(status_ints[3] % 4),
+            q_switch_synchronization=(
+                Trigger.INTERNAL if status_ints[3] <= 3 else Trigger.EXTERNAL
+            ),
+        )
