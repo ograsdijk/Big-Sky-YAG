@@ -134,6 +134,16 @@ class LaserStatus:
     q_switch: Status
     q_switch_synchronization: Trigger
 
+    @property
+    def flashlamp_running(self) -> bool:
+        """Whether the controller reports continuous flashlamp operation."""
+        return self.flashlamp is Status.START
+
+    @property
+    def qswitch_running(self) -> bool:
+        """Whether the controller reports continuous Q-switch operation."""
+        return self.q_switch is Status.START
+
 
 class Flashlamp:
     voltage = IntProperty(
@@ -241,10 +251,10 @@ class Flashlamp:
         """
         self.write("UC0")
 
-    def activate(self):
+    def activate(self) -> None:
         self.write("A")
 
-    def stop(self):
+    def stop(self) -> None:
         self.write("S")
 
     def simmer(self):
@@ -332,10 +342,10 @@ class QSwitch:
     def off(self):
         self.write("QOF0")
 
-    def start(self):
+    def start(self) -> None:
         self.write("PQ")
 
-    def stop(self):
+    def stop(self) -> None:
         self.write("SQ")
 
     def single(self):

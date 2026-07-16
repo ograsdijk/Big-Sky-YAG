@@ -1,10 +1,16 @@
-from typing import Any, List, Optional, Protocol, cast
+import time
+from collections.abc import Callable
+from typing import Optional, Protocol, cast
 
 import serial
 
 from .attributes import Flashlamp, FloatProperty, LaserStatus, QSwitch, Status, Trigger
 
-__all__ = ["BigSkyYag", "SerialInstrument"]
+__all__ = ["BigSkyYag", "LaserTransitionError", "SerialInstrument"]
+
+
+class LaserTransitionError(RuntimeError):
+    """The laser did not reach a requested operational state."""
 
 
 class Instrument(Protocol):
@@ -32,7 +38,7 @@ class SerialInstrument:
 
     def read(self) -> bytes:
         # All device responses are exactly 17 bytes: \r\n + 15 bytes of data.
-        return self._serial.read(17)
+        return cast(bytes, self._serial.read(17))
 
     def write(self, message: str) -> None:
         # Device requires \r\n line termination to process commands.
@@ -169,17 +175,115 @@ class BigSkyYag:
     @property
     def laser_status(self) -> LaserStatus:
         status_string = self.query("WOR")
-        status_ints = [int(v) for v in status_string.split(" ")[1::2]]
-        args: List[Any] = []
+        tokens = status_string.split()
+        if len(tokens) != 8:
+            raise ValueError(f"unexpected laser status response: {status_string!r}")
+        try:
+            interlock, flashlamp, simmer, q_switch = (
+                int(tokens[index]) for index in (1, 3, 5, 7)
+            )
+            flashlamp_state = Status(flashlamp % 4)
+            qswitch_state = Status(q_switch % 4)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"unexpected laser status response: {status_string!r}"
+            ) from exc
 
-        args.append(True if status_ints[0] == 0 else False)
+        return LaserStatus(
+            interlock=interlock == 0,
+            flashlamp=flashlamp_state,
+            flashlamp_synchronization=(
+                Trigger.INTERNAL if flashlamp <= 3 else Trigger.EXTERNAL
+            ),
+            simmer=bool(simmer),
+            q_switch=qswitch_state,
+            q_switch_synchronization=(
+                Trigger.INTERNAL if q_switch <= 3 else Trigger.EXTERNAL
+            ),
+        )
 
-        args.append(Status(status_ints[1] % 4))
-        args.append(Trigger.INTERNAL if status_ints[1] <= 3 else Trigger.EXTERNAL)
+    def _wait_for_operational_state(
+        self,
+        *,
+        running: bool,
+        timeout_s: float,
+        poll_s: float,
+    ) -> None:
+        deadline = time.monotonic() + max(0.0, float(timeout_s))
+        last_status: LaserStatus | None = None
+        last_shutter: bool | None = None
+        last_error: Exception | None = None
+        while True:
+            try:
+                last_status = self.laser_status
+                last_shutter = self.shutter
+                if (
+                    last_status.flashlamp_running is running
+                    and last_status.qswitch_running is running
+                    and last_shutter is running
+                ):
+                    return
+                last_error = None
+            except Exception as exc:
+                last_error = exc
 
-        args.append(True if status_ints[2] else False)
+            remaining_s = deadline - time.monotonic()
+            if remaining_s <= 0:
+                detail = (
+                    f"status={last_status!r}, shutter={last_shutter!r}, "
+                    f"last_error={last_error!r}"
+                )
+                raise LaserTransitionError(
+                    f"laser did not become {'armed' if running else 'disarmed'} "
+                    f"within {timeout_s:g} s ({detail})"
+                ) from last_error
+            time.sleep(min(max(0.0, float(poll_s)), remaining_s))
 
-        args.append(Status(status_ints[3] % 4))
-        args.append(Trigger.INTERNAL if status_ints[3] <= 3 else Trigger.EXTERNAL)
+    def arm(self, *, timeout_s: float = 2.0, poll_s: float = 0.1) -> None:
+        """Start flashlamp and Q-switch, then open and verify the shutter."""
+        try:
+            self.flashlamp.activate()
+            self.qswitch.start()
+            self.shutter = True
+            self._wait_for_operational_state(
+                running=True, timeout_s=timeout_s, poll_s=poll_s
+            )
+        except Exception:
+            try:
+                self.disarm(timeout_s=timeout_s, poll_s=poll_s)
+            except Exception as rollback_error:
+                raise LaserTransitionError(
+                    "laser arm failed and rollback could not verify a safe state"
+                ) from rollback_error
+            raise
 
-        return LaserStatus(*args)
+    def disarm(self, *, timeout_s: float = 2.0, poll_s: float = 0.1) -> None:
+        """Close shutter and stop Q-switch/flashlamp, then verify all are off."""
+        command_errors: list[Exception] = []
+
+        def close_shutter() -> None:
+            self.shutter = False
+
+        commands: tuple[Callable[[], None], ...] = (
+            close_shutter,
+            self.qswitch.stop,
+            self.flashlamp.stop,
+        )
+        for command in commands:
+            try:
+                command()
+            except Exception as exc:
+                command_errors.append(exc)
+
+        try:
+            self._wait_for_operational_state(
+                running=False, timeout_s=timeout_s, poll_s=poll_s
+            )
+        except Exception as verification_error:
+            if command_errors:
+                raise LaserTransitionError(
+                    "laser disarm commands failed and safe state was not verified"
+                ) from ExceptionGroup(
+                    "laser disarm failures", [*command_errors, verification_error]
+                )
+            raise
