@@ -1,3 +1,3 @@
-from .device import BigSkyYag
+from .device import BigSkyYag, LaserTransitionError
 
-__all__ = ["BigSkyYag"]
+__all__ = ["BigSkyYag", "LaserTransitionError"]
