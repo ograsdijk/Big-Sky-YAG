@@ -24,6 +24,12 @@ yag.qswitch.delay = 150 # ns
 # start the water pump
 yag.pump = True
 
+# wait for coolant flow to establish (~2 s) before opening the shutter or
+# firing; until then the WATER_FLOW interlock is active and the controller
+# will refuse to open the shutter
+import time
+time.sleep(2.0)
+
 # open the shutter, activate the flashlamp and enable the q-switch
 yag.shutter = True
 yag.flashlamp.activate()

@@ -94,10 +94,11 @@ class FloatProperty(Property):
         _value = int(round(value * write_multiplier, 0))
         retval = super().__set__(instance, _value)
         if (span := self._span) is not None and self._ret_string is not None:
-            ret_string = self._ret_string.replace(
-                self._ret_string[span[0] : span[1]], f"{round(value, self._decimals)}"
-            )
-            if retval != ret_string:
+            # Compare the echoed value numerically; the device formats with a
+            # fixed number of decimals (e.g. "28.00"), so a string rebuild would
+            # spuriously fail on trailing zeros.
+            echoed = float(retval[span[0] : span[1]])
+            if round(echoed, self._decimals) != round(value, self._decimals):
                 raise ValueError(f"failed to set {self._name} to {value}")
         return retval
 
@@ -235,9 +236,16 @@ class Flashlamp:
 
     @property
     def interlock(self) -> FlashlampInterlockState:
+        # The IF/IF2 registers use a snapshot-on-read (one-deep) buffer: each
+        # read returns the value captured at the previous read, then samples
+        # fresh. Read twice and use the second to get the current state; the
+        # delay between reads is irrelevant. (The WOR/laser_status interlock bit
+        # is live and unaffected.)
+        self.query("IF")
         interlock_str = self.query("IF")
         interlock_str = "".join(interlock_str.split(" ")[1:])[::-1]
         if1 = Bits(int(interlock_str, 2))
+        self.query("IF2")
         interlock_str = self.query("IF2")
         interlock_str = "".join(interlock_str.split(" ")[1:])[::-1]
         if2 = Bits(int(interlock_str, 2))
@@ -290,7 +298,7 @@ class QSwitch:
         read_only=False,
     )
     pulses_wait = IntProperty(
-        name="flashlamp pulses wait", command="QSW", ret_string="QS wait :  ---"
+        name="flashlamp pulses wait", command="QSW", ret_string="QS wait :   ---"
     )
 
     def __init__(self, parent):
@@ -326,10 +334,13 @@ class QSwitch:
     def status(self) -> bool:
         status = self.query("QOF")
         status = status.strip("QS at run").replace(" ", "")
-        return bool(status)
+        return bool(int(status))
 
     @property
     def interlock(self) -> QSwitchInterlockState:
+        # IQ uses a snapshot-on-read (one-deep) buffer: each read returns the
+        # previous sample, so read twice and use the second for current state.
+        self.query("IQ")
         interlock_str = self.query("IQ")
         interlock_str = "".join(interlock_str.split(" ")[1:])[::-1]
         iq = Bits(int(interlock_str, 2))

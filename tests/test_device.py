@@ -56,7 +56,7 @@ class StateInstrument:
             qswitch = int(self.qswitch) + 4
             self._response = f"I 0 L {flashlamp} M 0 Q {qswitch}\r\n".encode()
         elif command == "R":
-            state = "open" if self.shutter else "closed"
+            state = "opened" if self.shutter else "closed"
             self._response = f"shutter {state}\r\n".encode()
         else:
             self._response = b"ok\r\n"
@@ -113,6 +113,9 @@ def test_serial_instrument_writes_encoded_bytes(
 
         def write(self, message: bytes) -> None:
             self.writes.append(message)
+
+        def reset_input_buffer(self) -> None:
+            pass
 
         def close(self) -> None:
             pass

@@ -41,6 +41,11 @@ class SerialInstrument:
         return cast(bytes, self._serial.read(17))
 
     def write(self, message: str) -> None:
+        # Discard any stale/late-arriving bytes from a previous command so the
+        # following read is aligned with this command's response. Without this,
+        # a command that replies with a non-standard length (e.g. VT returns
+        # nothing) shifts every subsequent fixed 17-byte read by one.
+        self._serial.reset_input_buffer()
         # Device requires \r\n line termination to process commands.
         self._serial.write((message + "\r\n").encode(self._encoding))
 
@@ -128,8 +133,9 @@ class BigSkyYag:
             bool: shutter state
         """
         shutter = self.query("R")
+        # Device reports "shutter opened" / "shutter closed".
         shutter = shutter.removeprefix("shutter").strip()
-        return shutter == "open"
+        return shutter == "opened"
 
     @shutter.setter
     def shutter(self, state: bool) -> None:
