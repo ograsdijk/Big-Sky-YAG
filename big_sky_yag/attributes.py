@@ -158,7 +158,7 @@ class Flashlamp:
         name="capacitor voltage sampled", command="VA", ret_string="voltage ac----V"
     )
     voltage_capacitor_instant = IntProperty(
-        name="capacitor voltage instant", command="VT", ret_string="voltage it----V"
+        name="capacitor voltage instant", command="VI", ret_string="voltage it----V"
     )
     energy = FloatProperty(
         name="flashlamp energy",
