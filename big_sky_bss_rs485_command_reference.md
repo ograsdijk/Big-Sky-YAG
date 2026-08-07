@@ -285,7 +285,9 @@ The response combines flashlamp trigger mode with Q-switch state:
 - `fire ext` = lamp uses external trigger
 - `qs` = Q-switch active with internal trigger
 - `qse` = Q-switch active with external trigger
-- Spaces are shown exactly as printed; the active `PQ`/`OQ` forms print as 16 characters despite the manual's general 15-character statement
+- Spaces are shown exactly as printed; the manual prints the active `PQ`/`OQ`
+  forms as 16 characters, but the tested firmware replies with 15 (`fire ext   qse `,
+  hardware verified 2026-08-07). See Section 7.
 
 #### `PQ<CRLF>` - start Q-switch laser emission
 
@@ -408,14 +410,13 @@ IQS°ab°cd°ef°gh
 | `g` | Shutter closed |
 | `h` | Shown as `0`; no meaning documented |
 
-> **Partly verified (2026-08-07):** the shutter-closed bit was confirmed — with
-> the shutter closed the reply was `IQS 00 00 00 10`, decoding to the
-> shutter-closed bit at index `6`. The emission-inhibited bit could **not** be
-> captured safely: it advances only on actual flashlamp pulses, and activating
-> the flashlamp in external mode with the isolator gating produced no pulses, so
-> `IQ` stayed `IQS 00 00 00 10`. Water temperature requires a real thermal fault
-> and was not forced. The first two indices (`0/1` vs `1/2`) therefore remain
-> unresolved; the code keeps `1`, `2`, `6` unchanged.
+> **Verified (2026-08-07, live firing):** the indices are `0`, `1`, `6`, not
+> `1`, `2`, `6`. Emission inhibited was captured directly — during the Q-switch
+> inhibit window (flashlamp pumping, shutter open) the reply was
+> `IQS 10 00 00 00`, which after reversal is bit `0`. Shutter closed was
+> confirmed at bit `6` (`IQS 00 00 00 10`). Water temperature (bit `1`) follows
+> the same now-validated reversed order but was not asserted (it needs a real
+> thermal fault, which was not forced). The code now uses `0`, `1`, `6`.
 
 ### 5.4 HG temperature test
 
@@ -518,6 +519,12 @@ history and take precedence over spacing inferred from the extracted text:
     | `WMX` | `dly QS M 500 uS` | upper Q-switch delay limit |
     | `QSW<n>` | `QS wait :   000` | echo confirmed by a non-destructive set |
     | `IHG` | `IHG           0` | final digit `0` = temperature OK |
+11. During a live Q-switched shot the active `PQ` reply is `fire ext   qse `
+    (15 data characters, 17 bytes total) — **not** the 16 characters the manual
+    prints in Section 1.5. The fixed 17-byte read is therefore correct even while
+    Q-switching. Captured 2026-08-07 by passing a single Q-switch trigger through
+    the isolator. (Note: the controller's `CQ` counter increments per
+    Q-switch-armed flashlamp cycle, not per gated emission.)
 
 ## 8. Implementation cautions
 

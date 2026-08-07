@@ -271,15 +271,26 @@ def test_flashlamp_interlock_accepts_all_group1_prefixes(fresh_prefix: str) -> N
     assert state.WATER_FLOW is False
 
 
-def test_qswitch_interlock_uses_second_snapshot_without_resolving_unknown_bits() -> (
-    None
-):
+def test_qswitch_interlock_uses_second_snapshot_and_decodes_shutter_closed() -> None:
     parent = FakeParent(["IQS 00 00 00 00", "IQS 00 00 00 10"])
 
     state = QSwitch(parent).interlock
 
     assert state.SHUTTER_CLOSED is True
+    assert state.EMISSION_INHIBITED is False
     assert parent.messages == ["IQ", "IQ"]
+
+
+def test_qswitch_interlock_decodes_emission_inhibited() -> None:
+    # Captured on hardware (2026-08-07) during the Q-switch inhibit window with
+    # the shutter open: `IQS 10 00 00 00` -> emission-inhibited bit (index 0).
+    parent = FakeParent(["IQS 00 00 00 00", "IQS 10 00 00 00"])
+
+    state = QSwitch(parent).interlock
+
+    assert state.EMISSION_INHIBITED is True
+    assert state.WATER_TEMP is False
+    assert state.SHUTTER_CLOSED is False
 
 
 @pytest.mark.parametrize(

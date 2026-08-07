@@ -38,6 +38,11 @@ class QSwitchInterlockState:
 
 
 class QSwitchInterlock(IntEnum):
-    EMISSION_INHIBITED = 1
-    WATER_TEMP = 2
+    # Bit indices (after the printed a..h field is reversed) confirmed on the
+    # real controller 2026-08-07: `IQS 10 00 00 00` during the Q-switch inhibit
+    # window sets bit 0 (emission inhibited), and `IQS 00 00 00 10` with the
+    # shutter closed sets bit 6. Water temperature (bit 1) follows the same
+    # reversed manual order but was not asserted (needs a thermal fault).
+    EMISSION_INHIBITED = 0
+    WATER_TEMP = 1
     SHUTTER_CLOSED = 6

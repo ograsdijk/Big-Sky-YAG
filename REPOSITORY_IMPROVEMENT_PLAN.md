@@ -48,10 +48,9 @@ The device-independent work in this plan has been implemented:
 - README, package metadata, CI, publishing, and the manual-versus-firmware notes
   have been updated.
 
-The unresolved work is limited to behavior that needs new device captures:
-numbered addressing, literal `WOR` labels, the first two `IQ` bit positions, exact
-`SN` capitalization, anomalous reply lengths, and echoed responses for potential
-new setters.
+Most of this has since been resolved by hardware verification and a firing test
+(see the sections below). The only remaining device-gated item is the
+water-temperature `IQ` bit, which needs a real thermal-interlock fault to assert.
 
 ### Hardware verification (2026-08-07, controller SN 062, COM10)
 
@@ -80,9 +79,19 @@ pending captures and surfaced two protocol defects that were then fixed:
   (the positively confirmable signals) and does not demand the unreachable
   Q-switch `Start`. Disarm still confirms the stopped state in both modes.
 
-Still pending device work: the first two `IQ` bit positions (require controlled
-interlock/fault injection) and echoed responses for the optional `UCQ0`/`QSW<n>`
-setters.
+A follow-up firing test (2026-08-07, isolator-gated) resolved the last two items:
+
+- **`IQ` bit mapping — fixed** to `0/1/6`. Emission inhibited was captured live
+  (`IQS 10 00 00 00` during the inhibit window → bit `0`); shutter closed sits at
+  bit `6`. The previous `1/2/6` never reported emission inhibited. Water
+  temperature (bit `1`) follows the same validated order (not directly asserted).
+- **Active `PQ`/`OQ` reply length — resolved to 15 chars** (`fire ext   qse `),
+  confirming the fixed 17-byte read; the manual's 16-char note was a print
+  artifact. Verified by passing a single Q-switch trigger through the isolator.
+
+Remaining device work is limited to the water-temperature `IQ` bit (needs a real
+thermal-interlock fault) and the optional `UCQ0`/`SUC` echoes; neither blocks
+current behavior.
 
 ## Consolidated findings
 
@@ -144,19 +153,19 @@ Planned correction:
 - Replace character-set stripping with literal prefix and fixed-field parsing.
 - Include the raw response in every protocol error.
 
-#### 4. Q-switch interlock bit mapping may be off by one — **PENDING DEVICE (partly captured)**
+#### 4. Q-switch interlock bit mapping was off by one — **FIXED**
 
 After the eight printed bits are reversed, manual positions `a`, `b`, and `g`
-correspond to bit indices `0`, `1`, and `6`. The implementation currently uses
-`1`, `2`, and `6` for emission inhibited, water temperature, and shutter closed.
+correspond to bit indices `0`, `1`, and `6`. The implementation previously used
+`1`, `2`, and `6`, so `EMISSION_INHIBITED` was read from the wrong bit and never
+reported correctly.
 
-The flashlamp `IF1` and `IF2` mappings agree with the reference. Hardware capture
-(2026-08-07) confirmed the **shutter-closed** bit at index `6` (`IQS 00 00 00 10`
-with the shutter closed). The **emission-inhibited** bit could not be captured
-safely — it advances only on real flashlamp pulses, which did not occur when
-activating in external mode with the isolator gating — and **water temperature**
-requires a real thermal fault that was not forced. The first two indices (`0/1`
-vs `1/2`) remain unresolved and behavior is unchanged.
+Resolved by live firing (2026-08-07): during the Q-switch inhibit window
+(flashlamp pumping, shutter open) the reply was `IQS 10 00 00 00`, decoding to the
+emission-inhibited bit at index `0`; shutter-closed was confirmed at index `6`
+(`IQS 00 00 00 10`). The code now uses `0`, `1`, `6`. Water temperature (index
+`1`) follows the same validated reversed order but was not directly asserted (it
+needs a real thermal fault, which was not forced).
 
 #### 5. Serial-number addressing may omit the required prefix and padding — **FIXED**
 
@@ -479,12 +488,11 @@ response bytes, including `CRLF`, capitalization, padding, and total length.
    codes include flashlamp `4`/`6` and Q-switch `4` under external sync. Parser
    left label-permissive; command reference updated.
 
-3. [ ] **Q-switch `IQ` bit mapping**
-   - Capture a baseline response and controlled responses for emission inhibited,
-     water-temperature interlock, and shutter closed where safely possible.
-   - Confirm whether the correct indices are `0/1/6` or `1/2/6` after reversal.
-   - Baseline `IQS 00 00 00 10` (shutter closed) captured 2026-08-07; the first
-     two positions still need controlled fault injection and were not forced.
+3. [x] **Q-switch `IQ` bit mapping** — resolved to `0/1/6` by live firing
+   (2026-08-07). Emission inhibited captured directly (`IQS 10 00 00 00` → bit 0)
+   and shutter closed at bit 6 (`IQS 00 00 00 10`); code updated from `1/2/6`.
+   Water temperature (bit 1) follows the same validated order but needs a real
+   thermal fault to assert (not forced).
 
 4. [x] **Serial-number response** — captured 2026-08-07: `s/number    062`
    (lowercase, three-digit zero-padded).
