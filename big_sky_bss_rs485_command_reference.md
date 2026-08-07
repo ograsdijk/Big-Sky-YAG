@@ -26,10 +26,11 @@ $001S<CRLF>
 
 This places device `001` in standby mode.
 
-> **Device verification needed:** the current Python implementation historically
-> emits an unprefixed decimal serial number. Broadcast operation has been tested,
-> but neither numbered form has a recorded side-by-side hardware capture. Preserve
-> the manual's `$xxx` form here until that capture is available.
+> **Hardware verified (2026-08-07, SN 062):** the addressed form is the manual's
+> `$xxx` with a three-digit zero-padded serial number. `$062SN` is answered,
+> while `062SN`, `62SN`, `$62SN`, and `>062SN` all return no reply. The library
+> now emits `$xxx`; the earlier unprefixed decimal form (`62SN`) elicited no
+> response and was incorrect. Broadcast `>` remains answered.
 
 To broadcast to every BSS device on the RS-485 chain, prefix the command with `>`:
 
@@ -144,10 +145,11 @@ The letters `I`, `F`, `S`, and `Q` are literal labels; `a-d` are status digits.
 
 Code `3` is not documented on these pages.
 
-> **Device verification needed:** the repository's historical test simulator uses
-> literal labels `I/L/M/Q`, while the manual prints `I/F/S/Q`. The numeric field
-> order and values agree. Capture a raw `WOR` response before making software
-> validation depend on the two middle labels.
+> **Hardware verified (2026-08-07):** the tested controller prints the manual's
+> `I/F/S/Q` labels (e.g. `I 0 F 4 S 0 Q 4`), not the historical simulator's
+> `I/L/M/Q`. The parser still validates only structure and numeric domains (it
+> requires the outer `I`/`Q` labels and alphabetic middle labels) so it stays
+> compatible with both label sets across firmware revisions.
 
 ---
 
@@ -173,9 +175,9 @@ Code `3` is not documented on these pages.
 | `E<CRLF>` | Read enable-fire delay/time | `ena°charg°-.--S` | 87 |
 | `SN<CRLF>` | Read serial number | `S/Number°°°°---` | 87 |
 
-> **Device verification needed:** repository fixtures and historical parsing use
-> lowercase `s/number`, while the manual prints `S/Number`. Software accepts both
-> capitalization variants pending an exact raw capture.
+> **Hardware verified (2026-08-07):** the tested controller replies with
+> lowercase `s/number` and a three-digit zero-padded value (`s/number    062`).
+> Software still accepts both capitalization variants for firmware portability.
 
 ### 3.2 Program flashlamp parameters
 
@@ -374,6 +376,13 @@ IF°00°00°00°00
 
 The scan presents `IF` as a general query and also lists `IF1` and `IF2`. A parser should therefore be prepared for the all-zero `IF ...` form as well as `IF1 ...` and `IF2 ...` group replies.
 
+> **Hardware verified (2026-08-07):** on the tested controller a cold first `IF`
+> read returns the stale one-deep sample labelled `IF1`, and every subsequent
+> read returns the fresh sample labelled `IF.` (for example `IF. 00 00 00 00`).
+> The library reads twice and uses the second (fresh) reply, so it must accept
+> the `IF.` prefix in addition to `IF` and `IF1`. `IF2` and `IQ` (labelled
+> `IQS`) kept a stable prefix across reads.
+
 ### 5.3 Q-switch safety query
 
 Command:
@@ -399,11 +408,14 @@ IQS°ab°cd°ef°gh
 | `g` | Shutter closed |
 | `h` | Shown as `0`; no meaning documented |
 
-> **Device verification needed:** after reversing the printed `a..h` field into
-> least-significant-bit order, this table implies indices `0`, `1`, and `6` for
-> emission inhibited, water temperature, and shutter closed. The current code uses
-> `1`, `2`, and `6`. Do not change the first two indices until controlled raw
-> responses are captured under an approved hardware procedure.
+> **Partly verified (2026-08-07):** the shutter-closed bit was confirmed — with
+> the shutter closed the reply was `IQS 00 00 00 10`, decoding to the
+> shutter-closed bit at index `6`. The emission-inhibited bit could **not** be
+> captured safely: it advances only on actual flashlamp pulses, and activating
+> the flashlamp in external mode with the isolator gating produced no pulses, so
+> `IQ` stayed `IQS 00 00 00 10`. Water temperature requires a real thermal fault
+> and was not forced. The first two indices (`0/1` vs `1/2`) therefore remain
+> unresolved; the code keeps `1`, `2`, `6` unchanged.
 
 ### 5.4 HG temperature test
 
@@ -474,6 +486,38 @@ history and take precedence over spacing inferred from the extracted text:
    `VT` command was invalid and returned no usable response.
 5. Fixed decimal echoes can contain trailing zeroes, such as `28.00`; compare
    numeric values rather than reconstructing the response string.
+6. Every reply captured on the tested controller (SN 062) was exactly 17 bytes
+   (`CRLF` + 15 data characters), including the Section 1.5 templates flagged as
+   printed anomalies (`R`, `QSW`, `IF`, `IF2`, `IQ`, and the `A`/`S`/`PQ`/`SQ`
+   activation replies). The 17-byte fixed-frame read is correct for the commands
+   the library uses.
+7. Addressed commands use `$xxx` (three-digit zero-padded serial number); the
+   unprefixed decimal form returns no reply. See Section 1.2.
+8. The `WOR` middle labels are `F`/`S` on this firmware; the fresh flashlamp
+   interlock-1 prefix is `IF.`. See Sections 2.3 and 5.2.
+9. With the Q-switch in external mode (`QSM2`), `PQ` does not drive the `WOR`
+   Q-switch field to a continuous `Start` code; it stays at the external `Stop`
+   code (`Q 4`) while awaiting external triggers. Flashlamp `A` does report
+   `Start` (`F 6`). The library's `arm()` verification accounts for this: it
+   requires the Q-switch `Start` only under internal synchronization.
+10. Captured reply templates for the previously unexposed commands (now exposed
+    by the API), all exactly 17 bytes:
+
+    | Command | Captured reply | Notes |
+    |---|---|---|
+    | `X` | `SPECTRA-SY 3.68` | model + revision (manual printed `SPECTRA-SC`) |
+    | `DAT` | `20/12/02` | `dd/mm/yy` |
+    | `CGF` | `temp. CG 091 F ` | Fahrenheit cooling-group temperature |
+    | `T` | `ct time 7040:23` | `hhhh:mm` |
+    | `ROF` | `shutt. at run 0` | shutter-at-run flag |
+    | `ECH` | `echo on        ` | reply/echo mode |
+    | `VMO` | `Voltage m0950 V` | average lamp voltage (capital `V`) |
+    | `D` | `dis charg 00.0S` | idle-fire interval, seconds |
+    | `E` | `ena charg 00.0S` | enable-fire interval, seconds |
+    | `WMN` | `dly QS m 100 uS` | lower Q-switch delay limit |
+    | `WMX` | `dly QS M 500 uS` | upper Q-switch delay limit |
+    | `QSW<n>` | `QS wait :   000` | echo confirmed by a non-destructive set |
+    | `IHG` | `IHG           0` | final digit `0` = temperature OK |
 
 ## 8. Implementation cautions
 

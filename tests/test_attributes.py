@@ -180,11 +180,66 @@ def test_invalid_mode_setters_raise_before_writing() -> None:
     assert parent.messages == []
 
 
+def test_new_read_descriptors_parse_captured_templates() -> None:
+    # Templates captured from the real controller (2026-08-07, SN 062).
+    flashlamp = Flashlamp(FakeParent(["Voltage m0950 V"]))
+    assert flashlamp.voltage_average == 950
+
+    flashlamp = Flashlamp(FakeParent(["dis charg 00.0S", "ena charg 00.0S"]))
+    assert flashlamp.idle_fire_interval == 0.0
+    assert flashlamp.enable_fire_interval == 0.0
+
+    qswitch = QSwitch(
+        FakeParent(["dly QS m 100 uS", "dly QS M 500 uS", "QS wait :   000"])
+    )
+    assert qswitch.delay_min == 100
+    assert qswitch.delay_max == 500
+    assert qswitch.pulses_wait == 0
+
+
+def test_new_setters_emit_commands_and_verify_echo() -> None:
+    parent = FakeParent(
+        [
+            "QS wait :   100",
+            "dly QS m 150 uS",
+            "dly QS M 350 uS",
+            "dis charg 01.0S",
+            "ena charg 02.5S",
+        ]
+    )
+    qswitch = QSwitch(parent)
+    flashlamp = Flashlamp(parent)
+
+    qswitch.pulses_wait = 100
+    qswitch.delay_min = 150
+    qswitch.delay_max = 350
+    flashlamp.idle_fire_interval = 1.0
+    flashlamp.enable_fire_interval = 2.5
+
+    assert parent.messages == ["QSW100", "WMN150", "WMX350", "D10", "E25"]
+
+
+@pytest.mark.parametrize("value", [99, 1000])
+def test_factory_delay_limit_setters_reject_out_of_range(value: int) -> None:
+    with pytest.raises(ValueError, match="outside of range"):
+        QSwitch(FakeParent([])).delay_min = value
+
+
+def test_counter_maintenance_methods_emit_documented_commands() -> None:
+    parent = FakeParent(["ok", "ok"])
+    QSwitch(parent).counter_user_reset()
+    Flashlamp(parent).save_user_counter()
+
+    assert parent.messages == ["UCQ0", "SUC"]
+
+
 def test_flashlamp_interlocks_use_second_snapshot_and_decode_known_bits() -> None:
+    # Hardware verified (2026-08-07): the stale one-deep sample is labelled
+    # `IF1`; the fresh sample used for the state is labelled `IF.`.
     parent = FakeParent(
         [
             "IF1 00 00 00 00",
-            "IF1 10 10 00 00",
+            "IF. 10 10 00 00",
             "IF2 00 00 00 00",
             "IF2 00 10 01 00",
         ]
@@ -198,6 +253,22 @@ def test_flashlamp_interlocks_use_second_snapshot_and_decode_known_bits() -> Non
     assert state.WATER_TEMP is True
     assert state.LAMP_HEAD_CONN is False
     assert parent.messages == ["IF", "IF", "IF2", "IF2"]
+
+
+@pytest.mark.parametrize("fresh_prefix", ["IF.", "IF1", "IF"])
+def test_flashlamp_interlock_accepts_all_group1_prefixes(fresh_prefix: str) -> None:
+    parent = FakeParent(
+        [
+            "IF1 00 00 00 00",
+            f"{fresh_prefix} 00 00 00 00",
+            "IF2 00 00 00 00",
+            "IF2 00 00 00 00",
+        ]
+    )
+
+    state = Flashlamp(parent).interlock
+
+    assert state.WATER_FLOW is False
 
 
 def test_qswitch_interlock_uses_second_snapshot_without_resolving_unknown_bits() -> (

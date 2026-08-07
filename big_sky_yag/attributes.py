@@ -245,11 +245,30 @@ class Flashlamp:
         decimals=2,
         read_only=False,
     )
+    voltage_average = IntProperty(
+        name="average lamp voltage", command="VMO", ret_string="Voltage m---- V"
+    )
     counter = IntProperty(
         name="shot counter", command="C", ret_string="ct LP ---------"
     )
     user_counter = IntProperty(
         name="user shot counter", command="UC", ret_string="cu LP ---------"
+    )
+    idle_fire_interval = FloatProperty(
+        name="idle-fire interval in s",
+        command="D",
+        ret_string="dis charg --.-S",
+        lower_upper=(0.0, 99.9),
+        decimals=1,
+        read_only=False,
+    )
+    enable_fire_interval = FloatProperty(
+        name="enable-fire interval in s",
+        command="E",
+        ret_string="ena charg --.-S",
+        lower_upper=(0.0, 99.9),
+        decimals=1,
+        read_only=False,
     )
 
     def __init__(self, parent: CommandController) -> None:
@@ -317,7 +336,10 @@ class Flashlamp:
         # delay between reads is irrelevant. (The WOR/laser_status interlock bit
         # is live and unaffected.)
         self.query("IF")
-        interlock_str = _parse_interlock_bits(self.query("IF"), {"IF", "IF1"})
+        # On the tested controller the fresh flashlamp interlock-1 read is
+        # labelled `IF.` (the stale one-deep sample is labelled `IF1`); the
+        # manual's all-OK form is `IF`. Accept all three.
+        interlock_str = _parse_interlock_bits(self.query("IF"), {"IF", "IF1", "IF."})
         if1 = Bits(int(interlock_str, 2))
         self.query("IF2")
         interlock_str = _parse_interlock_bits(self.query("IF2"), {"IF2"})
@@ -331,6 +353,10 @@ class Flashlamp:
         Reset the user lamp shot counter.
         """
         self.write("UC0")
+
+    def save_user_counter(self) -> None:
+        """Save the current user counter to non-volatile memory (`SUC`)."""
+        self.write("SUC")
 
     def activate(self) -> None:
         self.write("A")
@@ -370,8 +396,26 @@ class QSwitch:
         lower_upper=(100, 999),
         read_only=False,
     )
+    delay_min = IntProperty(
+        name="lower Q-switch delay limit",
+        command="WMN",
+        ret_string="dly QS m --- uS",
+        lower_upper=(100, 999),
+        read_only=False,
+    )
+    delay_max = IntProperty(
+        name="upper Q-switch delay limit",
+        command="WMX",
+        ret_string="dly QS M --- uS",
+        lower_upper=(100, 999),
+        read_only=False,
+    )
     pulses_wait = IntProperty(
-        name="flashlamp pulses wait", command="QSW", ret_string="QS wait :   ---"
+        name="flashlamp pulses wait",
+        command="QSW",
+        ret_string="QS wait :   ---",
+        lower_upper=(0, 999),
+        read_only=False,
     )
 
     def __init__(self, parent: CommandController) -> None:
@@ -416,6 +460,10 @@ class QSwitch:
         iq = Bits(int(interlock_str, 2))
         state = dict((i.name, bool(iq.get_bit(i))) for i in QSwitchInterlock)
         return QSwitchInterlockState(**state)
+
+    def counter_user_reset(self) -> None:
+        """Reset the Q-switch user shot counter (`UCQ0`)."""
+        self.write("UCQ0")
 
     def on(self) -> None:
         self.write("QOF1")

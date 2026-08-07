@@ -53,6 +53,37 @@ numbered addressing, literal `WOR` labels, the first two `IQ` bit positions, exa
 `SN` capitalization, anomalous reply lengths, and echoed responses for potential
 new setters.
 
+### Hardware verification (2026-08-07, controller SN 062, COM10)
+
+A live verification pass against the real controller resolved most of the
+pending captures and surfaced two protocol defects that were then fixed:
+
+- **Numbered addressing** is `$xxx` (three-digit zero-padded serial number).
+  `$062SN` is answered; `062SN`/`62SN`/`>062SN` are not. The library previously
+  emitted the unprefixed decimal form and got no reply — **fixed** to `$xxx`.
+- **Flashlamp interlock (`IF`)** returns the fresh sample with prefix `IF.`
+  (the stale one-deep sample is `IF1`). The parser accepted only `IF`/`IF1`, so
+  `flashlamp.interlock` raised on every real read — **fixed** by accepting `IF.`.
+- **`WOR` labels** are `I/F/S/Q` on this firmware (not the simulator's
+  `I/L/M/Q`); the parser stays label-permissive for portability.
+- **`SN`** is lowercase `s/number`, three-digit zero-padded.
+- **Reply framing:** every command used by the library replied with exactly 17
+  bytes (`CRLF` + 15 data chars), including the templates flagged as printed
+  anomalies. The fixed 17-byte read is correct.
+- **`disarm()`** was verified end-to-end on hardware (shutter closed, Q-switch
+  and flashlamp stopped, safe state positively confirmed).
+- **`arm()` in external mode — fixed.** With the Q-switch in external mode
+  (`QSM2`, this system's operating mode), `PQ` never drives `WOR` to a
+  continuous Q-switch `Start`. `arm()`'s verification is now mode-aware: it
+  requires the Q-switch `Start` only under internal synchronization; under
+  external synchronization it verifies the flashlamp `Start` and open shutter
+  (the positively confirmable signals) and does not demand the unreachable
+  Q-switch `Start`. Disarm still confirms the stopped state in both modes.
+
+Still pending device work: the first two `IQ` bit positions (require controlled
+interlock/fault injection) and echoed responses for the optional `UCQ0`/`QSW<n>`
+setters.
+
 ## Consolidated findings
 
 Status labels used below:
@@ -77,7 +108,7 @@ Planned correction:
 - Raise a dedicated protocol-response exception for every other value.
 - Test empty, truncated, mislabeled, and unknown replies.
 
-#### 2. `WOR` status parsing accepts unsupported values and ignores labels — **PARTIAL**
+#### 2. `WOR` status parsing accepts unsupported values and ignores labels — **FIXED (labels captured)**
 
 The parser checks token count and numeric conversion but does not validate literal
 labels or the complete numeric domains. Modulo decoding can accept some negative
@@ -113,16 +144,21 @@ Planned correction:
 - Replace character-set stripping with literal prefix and fixed-field parsing.
 - Include the raw response in every protocol error.
 
-#### 4. Q-switch interlock bit mapping may be off by one — **PENDING DEVICE**
+#### 4. Q-switch interlock bit mapping may be off by one — **PENDING DEVICE (partly captured)**
 
 After the eight printed bits are reversed, manual positions `a`, `b`, and `g`
 correspond to bit indices `0`, `1`, and `6`. The implementation currently uses
 `1`, `2`, and `6` for emission inhibited, water temperature, and shutter closed.
 
-The flashlamp `IF1` and `IF2` mappings agree with the reference. The Q-switch
-mapping needs a controlled hardware capture before changing behavior.
+The flashlamp `IF1` and `IF2` mappings agree with the reference. Hardware capture
+(2026-08-07) confirmed the **shutter-closed** bit at index `6` (`IQS 00 00 00 10`
+with the shutter closed). The **emission-inhibited** bit could not be captured
+safely — it advances only on real flashlamp pulses, which did not occur when
+activating in external mode with the isolator gating — and **water temperature**
+requires a real thermal fault that was not forced. The first two indices (`0/1`
+vs `1/2`) remain unresolved and behavior is unchanged.
 
-#### 5. Serial-number addressing may omit the required prefix and padding — **PENDING DEVICE**
+#### 5. Serial-number addressing may omit the required prefix and padding — **FIXED**
 
 The reference specifies addressed commands such as `$042P1`. The implementation
 and fake test currently produce `42P1`. Broadcast commands using `>` agree with
@@ -158,7 +194,7 @@ Planned correction:
 - Keep the high-level `BigSkyYagTransitionError` message concise while retaining all
   underlying causes.
 
-#### 8. Serial framing assumptions need explicit handling — **PARTIAL**
+#### 8. Serial framing assumptions need explicit handling — **FIXED (framing confirmed)**
 
 The transport reads 17 bytes based on `CRLF` plus a 15-character answer. The
 manual prints several anomalous response lengths, while repository history records
@@ -327,25 +363,31 @@ Planned correction:
 - Preserve warnings about reply-length anomalies rather than normalizing strings
   to 15 characters without evidence.
 
-#### 18. Several documented commands are not exposed by the API — **DEFERRED**
+#### 18. Several documented commands are not exposed by the API — **FIXED**
 
-Currently unsupported reference commands include `X`, `DAT`, `CGF`, `T`, `ROF`,
-`ECH`, `SUC`, `VMO`, `D`, `E`, `WMN`, `WMX`, and `IHG`.
+All of the previously unsupported reference commands are now exposed, with parsers
+based on responses captured from the real controller (2026-08-07, SN 062):
 
-Two existing read-only areas have obvious documented write operations:
+- Reads: `X` (`software_revision`), `DAT` (`software_revision_date`), `CGF`
+  (`temperature_cooling_group_fahrenheit`), `T` (`operating_time`), `ROF`
+  (`shutter_at_run`), `ECH` (`echo`), `VMO` (`flashlamp.voltage_average`), `D`
+  (`flashlamp.idle_fire_interval`), `E` (`flashlamp.enable_fire_interval`), `WMN`
+  (`qswitch.delay_min`), `WMX` (`qswitch.delay_max`), `IHG` (`hg_temperature_ok`).
+- Writes: `ROF<n>`, `D<n>`, `E<n>`, `WMN<delay>`, `WMX<delay>`, writable
+  `QSW<n>` (`qswitch.pulses_wait`), `UCQ0` (`qswitch.counter_user_reset`), `SUC`
+  (`flashlamp.save_user_counter`), and `ECH1/ECH0` via `set_echo`.
 
-- `UCQ0` resets the Q-switch user counter.
-- `QSW<n>` sets the number of flashlamp pulses to wait.
+Safety handling applied:
 
-Planned correction:
-
-- Treat these as API enhancements, not defects.
-- Add only commands whose response layout and safety implications are understood.
-- Start with `UCQ0` and `QSW<n>` after capturing their actual echoed responses.
-- Do not expose `ECH0` through a normal request/response method without designing
-  for the intentional absence of its response.
-- Avoid adding factory-limit setters `WMN` and `WMX` until their configuration
-  restrictions and safety implications are documented.
+- `ECH0` is written through `set_echo(False)` without waiting for a reply (it
+  produces none), and its docstring warns that the controller stops answering
+  until `ECH1`. It is not exercised on real hardware.
+- `WMN`/`WMX` factory-limit setters are range-validated (`100..999`) and carry
+  README safety notes; they were implemented and unit-tested but not written to
+  the real device.
+- `QSW<n>` echo was captured non-destructively (set to its current value);
+  `UCQ0`/`SUC` echoes follow the documented templates and were not actuated on
+  hardware.
 
 ### P3: Package and API polish
 
@@ -429,29 +471,28 @@ response bytes, including `CRLF`, capitalization, padding, and total length.
 
 ### Required captures
 
-1. [ ] **Numbered addressing**
-   - Try the documented `$xxx` form on a safely readable command.
-   - Compare with the current unprefixed numeric form.
-   - Determine required zero-padding and valid address range.
+1. [x] **Numbered addressing** — captured 2026-08-07 (SN 062). Addressed form is
+   `$xxx` (three-digit zero-padded); `$062SN` answered, unprefixed/`>`-prefixed
+   numeric forms did not. Library updated to `$xxx` with 0..999 range validation.
 
-2. [ ] **`WOR` response**
-   - Capture at least one internal and one external synchronization state.
-   - Confirm whether literal labels are `I/F/S/Q`, `I/L/M/Q`, or firmware-specific.
-   - Confirm all state codes used by the tested controller.
+2. [x] **`WOR` response** — captured 2026-08-07. Labels are `I/F/S/Q`; observed
+   codes include flashlamp `4`/`6` and Q-switch `4` under external sync. Parser
+   left label-permissive; command reference updated.
 
 3. [ ] **Q-switch `IQ` bit mapping**
    - Capture a baseline response and controlled responses for emission inhibited,
      water-temperature interlock, and shutter closed where safely possible.
    - Confirm whether the correct indices are `0/1/6` or `1/2/6` after reversal.
+   - Baseline `IQS 00 00 00 10` (shutter closed) captured 2026-08-07; the first
+     two positions still need controlled fault injection and were not forced.
 
-4. [ ] **Serial-number response**
-   - Capture `SN` exactly.
-   - Confirm `S/Number` versus `s/number`, field width, and zero-padding.
+4. [x] **Serial-number response** — captured 2026-08-07: `s/number    062`
+   (lowercase, three-digit zero-padded).
 
-5. [ ] **Anomalous reply lengths used by the library**
-   - Capture `R`, `QSW`, `IF`, `IF2`, `IQ`, `A`, `S`, `M`, `PQ`, `SQ`, and `OQ`.
-   - Confirm whether every actual response is 15 characters after `CRLF`.
-   - Determine whether active `PQ`/`OQ` responses are actually 15 or 16 characters.
+5. [x] **Anomalous reply lengths used by the library** — captured 2026-08-07.
+   Every command the library uses (`R`, `QSW`, `IF`, `IF2`, `IQ`, `A`, `S`,
+   `PQ`, `SQ`, plus all reads) replied with exactly 17 bytes (`CRLF` + 15). The
+   fixed 17-byte read is correct; the printed anomalies were manual artifacts.
 
 6. [ ] **Potential API additions**
    - Capture `UCQ0` and `QSW<n>` echoed responses before exposing setters.
@@ -544,15 +585,16 @@ Exit criteria:
   documented firmware variants.
 - No unresolved wire-format assumption is presented as verified fact.
 
-### Phase 6: Documentation and selected API coverage — **PARTIAL**
+### Phase 6: Documentation and selected API coverage — **COMPLETED**
 
 1. Rewrite the primary README example around lifecycle and verified transitions.
 2. Document units, ranges, interlocks, exceptions, and operational limitations.
 3. Add `UCQ0` and writable `QSW` only if their captures are complete.
 4. Defer other protocol commands until demanded by a concrete use case.
 
-Documentation is complete. The optional `UCQ0` and writable `QSW` API additions
-remain deferred until their echoed responses are captured.
+Documentation is complete. `UCQ0` and writable `QSW` are now exposed (their echoes
+were captured), and the remaining reference commands were also added; see finding
+#18.
 
 Exit criteria:
 

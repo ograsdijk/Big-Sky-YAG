@@ -35,6 +35,7 @@ class StateInstrument:
         ignore_activate: bool = False,
         ignore_stop: bool = False,
         invalid_shutter_response: bool = False,
+        external_qswitch: bool = False,
     ) -> None:
         self.messages: list[str] = []
         self.flashlamp = Status.STOP
@@ -43,6 +44,9 @@ class StateInstrument:
         self.ignore_activate = ignore_activate
         self.ignore_stop = ignore_stop
         self.invalid_shutter_response = invalid_shutter_response
+        # An externally-triggered Q-switch idles at Stop after PQ; it never
+        # reports continuous Start via WOR (hardware verified 2026-08-07).
+        self.external_qswitch = external_qswitch
         self._response = b"ok\r\n"
 
     def read(self) -> bytes:
@@ -55,7 +59,7 @@ class StateInstrument:
             self.flashlamp = Status.START
         elif command == "S" and not self.ignore_stop:
             self.flashlamp = Status.STOP
-        elif command == "PQ":
+        elif command == "PQ" and not self.external_qswitch:
             self.qswitch = Status.START
         elif command == "SQ" and not self.ignore_stop:
             self.qswitch = Status.STOP
@@ -123,14 +127,25 @@ def test_port_is_required_without_an_injected_instrument() -> None:
         BigSkyYag()
 
 
-def test_existing_numbered_address_format_is_preserved_pending_verification() -> None:
+def test_numbered_address_uses_dollar_padded_serial_number() -> None:
+    # Hardware verified (2026-08-07): the addressed form is `$xxx` with a
+    # three-digit zero-padded serial number. `$062...` is answered while the
+    # unprefixed `062...`/`62...` and `>062...` forms are not.
     instrument = FakeInstrument([b"CG pump       1\r\n"])
     yag = BigSkyYag("COM4", serial_number=42, instrument=instrument)
 
     response = yag.write("P1")
 
     assert response == "CG pump       1"
-    assert instrument.messages == ["42P1"]
+    assert instrument.messages == ["$042P1"]
+
+
+@pytest.mark.parametrize("serial_number", [-1, 1000])
+def test_out_of_range_serial_number_raises_value_error(serial_number: int) -> None:
+    yag = BigSkyYag("COM4", instrument=FakeInstrument([]), serial_number=serial_number)
+
+    with pytest.raises(ValueError, match="Serial number is not valid"):
+        yag.query("SN")
 
 
 @pytest.mark.parametrize("serial_number", [True, object()])
@@ -317,6 +332,104 @@ def test_serial_number_rejects_unknown_response(response: bytes) -> None:
         _ = yag.serial_number
 
 
+def test_general_read_commands_parse_captured_templates() -> None:
+    # Templates captured from the real controller (2026-08-07, SN 062).
+    assert (
+        BigSkyYag(
+            "COM4", instrument=FakeInstrument([b"SPECTRA-SY 3.68\r\n"])
+        ).software_revision
+        == "SPECTRA-SY 3.68"
+    )
+    assert (
+        BigSkyYag(
+            "COM4", instrument=FakeInstrument([b"20/12/02       \r\n"])
+        ).software_revision_date
+        == "20/12/02"
+    )
+    assert (
+        BigSkyYag(
+            "COM4", instrument=FakeInstrument([b"ct time 7040:23\r\n"])
+        ).operating_time
+        == "7040:23"
+    )
+    assert (
+        BigSkyYag(
+            "COM4", instrument=FakeInstrument([b"temp. CG 091 F \r\n"])
+        ).temperature_cooling_group_fahrenheit
+        == 91.0
+    )
+    assert (
+        BigSkyYag(
+            "COM4", instrument=FakeInstrument([b"IHG           0\r\n"])
+        ).hg_temperature_ok
+        is True
+    )
+    assert (
+        BigSkyYag(
+            "COM4", instrument=FakeInstrument([b"IHG           1\r\n"])
+        ).hg_temperature_ok
+        is False
+    )
+
+
+@pytest.mark.parametrize(
+    ("prop", "response"),
+    [
+        ("software_revision", b"\r\n"),
+        ("software_revision_date", b"not/a/date\r\n"),
+        ("operating_time", b"wrong 1:2\r\n"),
+        ("hg_temperature_ok", b"nope\r\n"),
+        ("shutter_at_run", b"shutt. at run 2\r\n"),
+        ("echo", b"echo maybe\r\n"),
+    ],
+)
+def test_general_read_commands_reject_malformed(prop: str, response: bytes) -> None:
+    yag = BigSkyYag("COM4", instrument=FakeInstrument([response]))
+    with pytest.raises(BigSkyYagProtocolError):
+        getattr(yag, prop)
+
+
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [(b"shutt. at run 0\r\n", False), (b"shutt. at run 1\r\n", True)],
+)
+def test_shutter_at_run_reads_and_writes(response: bytes, expected: bool) -> None:
+    instrument = FakeInstrument([response])
+    yag = BigSkyYag("COM4", instrument=instrument)
+    assert yag.shutter_at_run is expected
+
+    instrument.responses.append(b"shutt. at run 1\r\n")
+    yag.shutter_at_run = True
+    assert instrument.messages[-1] == ">ROF1"
+
+
+@pytest.mark.parametrize(
+    ("response", "expected"), [(b"echo on \r\n", True), (b"echo off\r\n", False)]
+)
+def test_echo_reads_state(response: bytes, expected: bool) -> None:
+    yag = BigSkyYag("COM4", instrument=FakeInstrument([response]))
+    assert yag.echo is expected
+
+
+def test_set_echo_disable_writes_without_reading() -> None:
+    # ECH0 produces no reply, so no response is queued; set_echo must not read.
+    instrument = FakeInstrument([])
+    yag = BigSkyYag("COM4", instrument=instrument)
+
+    yag.set_echo(False)
+
+    assert instrument.messages == [">ECH0"]
+
+
+def test_set_echo_enable_uses_normal_write() -> None:
+    instrument = FakeInstrument([b"echo on \r\n"])
+    yag = BigSkyYag("COM4", instrument=instrument)
+
+    yag.set_echo(True)
+
+    assert instrument.messages == [">ECH1"]
+
+
 def test_laser_status_decodes_external_running_state() -> None:
     instrument = StateInstrument()
     instrument.flashlamp = Status.START
@@ -375,6 +488,20 @@ def test_arm_starts_and_verifies_complete_operational_state() -> None:
 
     assert instrument.flashlamp is Status.START
     assert instrument.qswitch is Status.START
+    assert instrument.shutter is True
+    assert instrument.messages == [">A", ">PQ", ">R1", ">WOR", ">R"]
+
+
+def test_arm_succeeds_with_externally_triggered_qswitch() -> None:
+    # In external Q-switch mode PQ never drives WOR to a continuous Start; arm()
+    # must still succeed on the flashlamp Start + open shutter it can verify.
+    instrument = StateInstrument(external_qswitch=True)
+    yag = BigSkyYag("COM4", instrument=instrument)
+
+    yag.arm(timeout_s=0)
+
+    assert instrument.flashlamp is Status.START
+    assert instrument.qswitch is Status.STOP
     assert instrument.shutter is True
     assert instrument.messages == [">A", ">PQ", ">R1", ">WOR", ">R"]
 

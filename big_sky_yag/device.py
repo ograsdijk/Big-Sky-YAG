@@ -68,6 +68,11 @@ class BigSkyYag:
         command="CG",
         ret_string="temp. CG -- d  ",
     )
+    temperature_cooling_group_fahrenheit = FloatProperty(
+        name="temperature cooling group in F",
+        command="CGF",
+        ret_string="temp. CG --- F ",
+    )
 
     def __init__(
         self,
@@ -125,29 +130,31 @@ class BigSkyYag:
     ) -> None:
         self.close()
 
-    def query(self, query: str) -> str:
+    def _format_command(self, payload: str) -> str:
+        """Prefix a command with its addressing header.
+
+        With no serial number the controller's `>` broadcast prefix is used.
+        With a serial number the addressed form is `$xxx`, a literal `$`
+        followed by the three-digit zero-padded serial number (hardware
+        verified: `$062...` is answered while `062...`/`62...`/`>062...` are
+        not). The unprefixed decimal form used previously produced no reply.
+        """
         if self._serial_number is None:
-            _query = f">{query}"
-        elif isinstance(self._serial_number, int) and not isinstance(
+            return f">{payload}"
+        if isinstance(self._serial_number, int) and not isinstance(
             self._serial_number, bool
         ):
-            _query = f"{self._serial_number}{query}"
-        else:
-            raise ValueError(f"Serial number is not valid, {self._serial_number}")
-        self.instrument.write(_query)
+            if not 0 <= self._serial_number <= 999:
+                raise ValueError(f"Serial number is not valid, {self._serial_number}")
+            return f"${self._serial_number:03d}{payload}"
+        raise ValueError(f"Serial number is not valid, {self._serial_number}")
+
+    def query(self, query: str) -> str:
+        self.instrument.write(self._format_command(query))
         return self.read()
 
     def write(self, command: str) -> str:
-        if self._serial_number is None:
-            _command = f">{command}"
-        elif isinstance(self._serial_number, int) and not isinstance(
-            self._serial_number, bool
-        ):
-            _command = f"{self._serial_number}{command}"
-        else:
-            raise ValueError(f"Serial number is not valid, {self._serial_number}")
-
-        self.instrument.write(_command)
+        self.instrument.write(self._format_command(command))
         return self.read()
 
     def save(self) -> None:
@@ -172,6 +179,95 @@ class BigSkyYag:
         if not value:
             raise BigSkyYagProtocolError(f"unexpected SN response: {response!r}")
         return value
+
+    @property
+    def software_revision(self) -> str:
+        """Controller software revision string (`X`), e.g. `SPECTRA-SY 3.68`."""
+        response = self.query("X")
+        value = response.strip()
+        if not value:
+            raise BigSkyYagProtocolError(f"unexpected X response: {response!r}")
+        return value
+
+    @property
+    def software_revision_date(self) -> str:
+        """Controller software revision date (`DAT`) as `dd/mm/yy`."""
+        response = self.query("DAT")
+        value = response.strip()
+        parts = value.split("/")
+        if len(parts) != 3 or not all(part.isdigit() for part in parts):
+            raise BigSkyYagProtocolError(f"unexpected DAT response: {response!r}")
+        return value
+
+    @property
+    def operating_time(self) -> str:
+        """Operating-time counter (`T`) as `hhhh:mm`."""
+        response = self.query("T")
+        prefix = "ct time"
+        if not response.startswith(prefix):
+            raise BigSkyYagProtocolError(f"unexpected T response: {response!r}")
+        value = response[len(prefix) :].strip()
+        hours, _, minutes = value.partition(":")
+        if not hours.isdigit() or not minutes.isdigit():
+            raise BigSkyYagProtocolError(f"unexpected T response: {response!r}")
+        return value
+
+    @property
+    def hg_temperature_ok(self) -> bool:
+        """HG temperature test (`IHG`); True when the final status digit is `0`."""
+        response = self.query("IHG")
+        if not response.startswith("IHG") or not response.strip()[-1:].isdigit():
+            raise BigSkyYagProtocolError(f"unexpected IHG response: {response!r}")
+        return response.strip()[-1] == "0"
+
+    @property
+    def shutter_at_run(self) -> bool:
+        """Whether the shutter opens automatically at run (`ROF`)."""
+        response = self.query("ROF")
+        prefix = "shutt. at run"
+        field = ""
+        if response.startswith(prefix):
+            field = response.removeprefix(prefix).strip()
+        if field not in {"0", "1"}:
+            raise BigSkyYagProtocolError(f"unexpected ROF response: {response!r}")
+        return field == "1"
+
+    @shutter_at_run.setter
+    def shutter_at_run(self, state: bool) -> None:
+        if not isinstance(state, bool):
+            raise TypeError(f"state not boolean but {type(state)}")
+        self.write(f"ROF{state:b}")
+
+    @property
+    def echo(self) -> bool:
+        """Reply/echo mode (`ECH`); True when the controller sends replies.
+
+        Note: no reply is available when replies are already disabled, so this
+        read will time out (raising a transport error) in that state.
+        """
+        response = self.query("ECH")
+        field = response.strip()
+        if field.startswith("echo on"):
+            return True
+        if field.startswith("echo off"):
+            return False
+        raise BigSkyYagProtocolError(f"unexpected ECH response: {response!r}")
+
+    def set_echo(self, enabled: bool) -> None:
+        """Enable or disable controller replies (`ECH1`/`ECH0`).
+
+        WARNING: `ECH0` disables *all* replies while commands still execute, so
+        the controller stops answering queries until `ECH1` is sent. Because the
+        disable command itself produces no reply, it is written without waiting
+        for a response. Use with care on a shared RS-485 bus.
+        """
+        if not isinstance(enabled, bool):
+            raise TypeError(f"enabled not boolean but {type(enabled)}")
+        if enabled:
+            self.write("ECH1")
+        else:
+            # ECH0 produces no reply; do not attempt the fixed-frame read.
+            self.instrument.write(self._format_command("ECH0"))
 
     @property
     def shutter(self) -> bool:
@@ -307,7 +403,7 @@ class BigSkyYag:
                 last_shutter = self.shutter
                 if (
                     last_status.flashlamp_running is running
-                    and last_status.qswitch_running is running
+                    and self._qswitch_state_reached(last_status, running=running)
                     and last_shutter is running
                 ):
                     return
@@ -328,6 +424,22 @@ class BigSkyYag:
             time.sleep(min(poll_s, remaining_s))
 
     @staticmethod
+    def _qswitch_state_reached(status: LaserStatus, *, running: bool) -> bool:
+        """Whether the Q-switch has reached the target arm/disarm state.
+
+        An externally-triggered Q-switch never reports continuous ``Start`` via
+        ``WOR``; it idles at the external ``Stop`` code while awaiting external
+        triggers (hardware verified 2026-08-07). So when *arming* with the
+        Q-switch in external synchronization there is no positive ``Start`` to
+        confirm — the flashlamp ``Start`` and open shutter remain positively
+        verified. When *disarming*, the stopped state is still confirmed in both
+        modes.
+        """
+        if running and status.q_switch_synchronization is Trigger.EXTERNAL:
+            return True
+        return status.qswitch_running is running
+
+    @staticmethod
     def _validate_transition_time(
         name: str, value: float, *, allow_zero: bool
     ) -> float:
@@ -341,7 +453,15 @@ class BigSkyYag:
         return parsed
 
     def arm(self, *, timeout_s: float = 2.0, poll_s: float = 0.1) -> None:
-        """Start flashlamp and Q-switch, then open and verify the shutter."""
+        """Start flashlamp and Q-switch, then open and verify the shutter.
+
+        Verification requires the flashlamp to report continuous ``Start`` and
+        the shutter to report open. The Q-switch is also required to report
+        ``Start`` when it is in internal synchronization; in external
+        synchronization it idles awaiting external triggers and never reports
+        ``Start``, so that condition is not required (the flashlamp and shutter
+        remain positively verified).
+        """
         timeout_s = self._validate_transition_time(
             "timeout_s", timeout_s, allow_zero=True
         )

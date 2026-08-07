@@ -45,8 +45,11 @@ with BigSkyYag("COM4") as yag:
     print(yag.qswitch.interlock)
 
     try:
-        # arm() starts the flashlamp and Q-switch, opens the shutter, and verifies
-        # those three reported states. It does not start the pump or independently
+        # arm() starts the flashlamp and Q-switch and opens the shutter, then
+        # verifies the flashlamp Start and open shutter. It also verifies the
+        # Q-switch Start under internal synchronization; an externally-triggered
+        # Q-switch idles awaiting triggers and never reports Start, so that check
+        # is skipped in external mode. It does not start the pump or independently
         # decide whether every site-specific operating prerequisite is satisfied.
         yag.arm(timeout_s=2.0)
 
@@ -109,14 +112,20 @@ yag.qswitch.mode = QSwitchMode.BURST
 | API | Type/units | Access | Controller range |
 |---|---|---|---|
 | `yag.temperature_cooling_group` | `float`, °C | read | controller-defined |
+| `yag.temperature_cooling_group_fahrenheit` | `float`, °F | read | controller-defined |
 | `yag.flashlamp.voltage` | `int`, V | read/write | 500–1800 |
+| `yag.flashlamp.voltage_average` | `int`, V | read | controller-defined |
+| `yag.flashlamp.idle_fire_interval` | `float`, s | read/write | 0.0–99.9 |
+| `yag.flashlamp.enable_fire_interval` | `float`, s | read/write | 0.0–99.9 |
+| `yag.qswitch.delay_min` | `int`, µs | read/write | 100–999 (factory limit) |
+| `yag.qswitch.delay_max` | `int`, µs | read/write | 100–999 (factory limit) |
 | `yag.flashlamp.energy` | `float`, J | read/write | 7.0–23.0 |
 | `yag.flashlamp.capacitance` | `float`, µF | read/write | 27.0–33.0 |
 | `yag.flashlamp.frequency` | `float`, Hz | read/write | 1.00–99.99 |
 | `yag.qswitch.frequency_divider` | `int`, F/n | read/write | 1–99 |
 | `yag.qswitch.pulses` | `int` | read/write | 1–999 |
 | `yag.qswitch.delay` | `int`, µs | read/write | 100–999 plus factory limits |
-| `yag.qswitch.pulses_wait` | `int` | read | controller-defined |
+| `yag.qswitch.pulses_wait` | `int` | read/write | 0–999 |
 
 Additional operations:
 
@@ -124,15 +133,31 @@ Additional operations:
 yag.save()
 serial_number = yag.serial_number
 
+# Device information and status
+revision = yag.software_revision            # e.g. "SPECTRA-SY 3.68"
+revision_date = yag.software_revision_date  # "dd/mm/yy"
+uptime = yag.operating_time                 # "hhhh:mm"
+hg_ok = yag.hg_temperature_ok               # IHG test
+run_opens_shutter = yag.shutter_at_run      # ROF; also settable
+replies_enabled = yag.echo                  # ECH
+
 lamp_total = yag.flashlamp.counter
 lamp_user = yag.flashlamp.user_counter
 yag.flashlamp.user_counter_reset()
+yag.flashlamp.save_user_counter()
 
 qswitch_total = yag.qswitch.counter
 qswitch_user = yag.qswitch.counter_user
+yag.qswitch.counter_user_reset()
 
 yag.qswitch.single()
 ```
+
+> [!CAUTION]
+> `yag.qswitch.delay_min` / `delay_max` write the controller's **factory** Q-switch
+> delay limits, and `yag.set_echo(False)` (`ECH0`) makes the controller stop
+> replying until `ECH1` is sent. Use these only when you understand the effect on
+> the laser and the RS-485 bus.
 
 ## Status, interlocks, and failures
 
