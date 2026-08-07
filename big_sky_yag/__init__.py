@@ -2,20 +2,20 @@ from .attributes import LaserStatus, QSwitchMode, Status, Trigger
 from .device import BigSkyYag, SerialInstrument
 from .errors import (
     BigSkyYagError,
-    LaserProtocolError,
-    LaserTransitionError,
-    LaserTransportError,
+    BigSkyYagProtocolError,
+    BigSkyYagTransitionError,
+    BigSkyYagTransportError,
 )
 from .interlock import FlashlampInterlockState, QSwitchInterlockState
 
 __all__ = [
     "BigSkyYag",
     "BigSkyYagError",
+    "BigSkyYagProtocolError",
+    "BigSkyYagTransitionError",
+    "BigSkyYagTransportError",
     "FlashlampInterlockState",
-    "LaserProtocolError",
     "LaserStatus",
-    "LaserTransitionError",
-    "LaserTransportError",
     "QSwitchMode",
     "QSwitchInterlockState",
     "SerialInstrument",

@@ -147,9 +147,9 @@ the second response so callers receive the current sample.
 The public exception hierarchy is:
 
 - `BigSkyYagError`: base library runtime error.
-- `LaserTransportError`: incomplete or undecodable serial data.
-- `LaserProtocolError`: a controller reply has an unknown or invalid shape.
-- `LaserTransitionError`: an arm/disarm state could not be positively verified.
+- `BigSkyYagTransportError`: incomplete or undecodable serial data.
+- `BigSkyYagProtocolError`: a controller reply has an unknown or invalid shape.
+- `BigSkyYagTransitionError`: an arm/disarm state could not be positively verified.
 
 Unknown responses are never interpreted as a closed shutter or another safe
 state. `arm()` attempts a verified disarm if arming fails. If both operations fail,

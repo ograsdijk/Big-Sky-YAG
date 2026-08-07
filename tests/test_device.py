@@ -5,9 +5,9 @@ import pytest
 
 from big_sky_yag import (
     BigSkyYag,
-    LaserProtocolError,
-    LaserTransitionError,
-    LaserTransportError,
+    BigSkyYagProtocolError,
+    BigSkyYagTransitionError,
+    BigSkyYagTransportError,
     Status,
     Trigger,
 )
@@ -156,7 +156,7 @@ def test_read_strips_line_endings_and_uses_configured_encoding() -> None:
 def test_read_rejects_invalid_text() -> None:
     yag = BigSkyYag("COM4", instrument=FakeInstrument([b"\xff\r\n"]), encoding="ascii")
 
-    with pytest.raises(LaserTransportError, match="not valid text"):
+    with pytest.raises(BigSkyYagTransportError, match="not valid text"):
         yag.read()
 
 
@@ -221,7 +221,7 @@ def test_serial_instrument_rejects_incomplete_response(
     monkeypatch.setattr("big_sky_yag.device.serial.Serial", FakeSerial)
     instrument = SerialInstrument("COM4")
 
-    with pytest.raises(LaserTransportError, match="expected 17 bytes, received 7"):
+    with pytest.raises(BigSkyYagTransportError, match="expected 17 bytes, received 7"):
         instrument.read()
 
 
@@ -274,7 +274,7 @@ def test_shutter_accepts_only_known_states(response: bytes, expected: bool) -> N
 def test_shutter_rejects_unknown_states(response: bytes) -> None:
     yag = BigSkyYag("COM4", instrument=FakeInstrument([response]))
 
-    with pytest.raises(LaserProtocolError, match="unexpected R response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected R response"):
         _ = yag.shutter
 
 
@@ -296,7 +296,7 @@ def test_pump_accepts_only_binary_controller_states(
 def test_pump_rejects_malformed_states(response: bytes) -> None:
     yag = BigSkyYag("COM4", instrument=FakeInstrument([response]))
 
-    with pytest.raises(LaserProtocolError, match="unexpected P response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected P response"):
         _ = yag.pump
 
 
@@ -313,7 +313,7 @@ def test_serial_number_accepts_documented_capitalization_variants(
 def test_serial_number_rejects_unknown_response(response: bytes) -> None:
     yag = BigSkyYag("COM4", instrument=FakeInstrument([response]))
 
-    with pytest.raises(LaserProtocolError, match="unexpected SN response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected SN response"):
         _ = yag.serial_number
 
 
@@ -363,7 +363,7 @@ def test_laser_status_accepts_every_documented_subsystem_code(code: int) -> None
 def test_laser_status_rejects_malformed_response(response: bytes) -> None:
     yag = BigSkyYag("COM4", instrument=FakeInstrument([response]))
 
-    with pytest.raises(LaserProtocolError, match="unexpected WOR response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected WOR response"):
         _ = yag.laser_status
 
 
@@ -398,7 +398,7 @@ def test_arm_failure_rolls_back_to_verified_safe_state() -> None:
     instrument = StateInstrument(ignore_activate=True)
     yag = BigSkyYag("COM4", instrument=instrument)
 
-    with pytest.raises(LaserTransitionError, match="did not become armed"):
+    with pytest.raises(BigSkyYagTransitionError, match="did not become armed"):
         yag.arm(timeout_s=0)
 
     assert instrument.flashlamp is Status.STOP
@@ -410,10 +410,12 @@ def test_disarm_rejects_malformed_shutter_verification() -> None:
     instrument = StateInstrument(invalid_shutter_response=True)
     yag = BigSkyYag("COM4", instrument=instrument)
 
-    with pytest.raises(LaserTransitionError, match="did not become disarmed") as exc:
+    with pytest.raises(
+        BigSkyYagTransitionError, match="did not become disarmed"
+    ) as exc:
         yag.disarm(timeout_s=0)
 
-    assert isinstance(exc.value.__cause__, LaserProtocolError)
+    assert isinstance(exc.value.__cause__, BigSkyYagProtocolError)
 
 
 def test_disarm_failure_is_reported_when_safe_state_cannot_be_verified() -> None:
@@ -423,7 +425,7 @@ def test_disarm_failure_is_reported_when_safe_state_cannot_be_verified() -> None
     instrument.shutter = True
     yag = BigSkyYag("COM4", instrument=instrument)
 
-    with pytest.raises(LaserTransitionError, match="did not become disarmed"):
+    with pytest.raises(BigSkyYagTransitionError, match="did not become disarmed"):
         yag.disarm(timeout_s=0)
 
 
@@ -487,11 +489,11 @@ def test_arm_and_failed_rollback_preserve_both_failures() -> None:
     yag = BigSkyYag("COM4", instrument=instrument)
 
     with pytest.raises(
-        LaserTransitionError, match="rollback could not verify"
+        BigSkyYagTransitionError, match="rollback could not verify"
     ) as captured:
         yag.arm(timeout_s=0)
 
     cause = captured.value.__cause__
     assert isinstance(cause, ExceptionGroup)
     failures = list(_walk_exception_group(cause))
-    assert sum(isinstance(error, LaserTransitionError) for error in failures) >= 2
+    assert sum(isinstance(error, BigSkyYagTransitionError) for error in failures) >= 2

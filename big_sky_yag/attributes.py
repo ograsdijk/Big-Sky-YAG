@@ -4,7 +4,7 @@ from enum import IntEnum
 from typing import Any, Generic, Protocol, TypeVar, cast, overload
 
 from .bit_handling import Bits
-from .errors import LaserProtocolError
+from .errors import BigSkyYagProtocolError
 from .interlock import (
     FlashlampInterlock1,
     FlashlampInterlock2,
@@ -64,7 +64,7 @@ class Property(Generic[ValueT]):
         if self._span is not None:
             start, end = self._span
             if len(response) < end:
-                raise LaserProtocolError(
+                raise BigSkyYagProtocolError(
                     f"unexpected {self._command} response for {self._name}: "
                     f"{response!r}"
                 )
@@ -99,7 +99,7 @@ class IntProperty(Property[int]):
         try:
             return int(self._extract_field(response))
         except ValueError as exc:
-            raise LaserProtocolError(
+            raise BigSkyYagProtocolError(
                 f"unexpected {self._command} response for {self._name}: {response!r}"
             ) from exc
 
@@ -115,7 +115,7 @@ class IntProperty(Property[int]):
             try:
                 echoed = int(retval[span[0] : span[1]])
             except (TypeError, ValueError) as exc:
-                raise LaserProtocolError(
+                raise BigSkyYagProtocolError(
                     f"unexpected {self._command} write response for {self._name}: "
                     f"{retval!r}"
                 ) from exc
@@ -141,7 +141,7 @@ class FloatProperty(Property[float]):
         try:
             return float(self._extract_field(response))
         except ValueError as exc:
-            raise LaserProtocolError(
+            raise BigSkyYagProtocolError(
                 f"unexpected {self._command} response for {self._name}: {response!r}"
             ) from exc
 
@@ -162,7 +162,7 @@ class FloatProperty(Property[float]):
             try:
                 echoed = float(retval[span[0] : span[1]])
             except (TypeError, ValueError) as exc:
-                raise LaserProtocolError(
+                raise BigSkyYagProtocolError(
                     f"unexpected {self._command} write response for {self._name}: "
                     f"{retval!r}"
                 ) from exc
@@ -264,16 +264,16 @@ class Flashlamp:
     @staticmethod
     def _parse_mode(response: str, prefix: str, allowed: set[int], command: str) -> int:
         if not response.startswith(prefix):
-            raise LaserProtocolError(f"unexpected {command} response: {response!r}")
+            raise BigSkyYagProtocolError(f"unexpected {command} response: {response!r}")
         field = response.removeprefix(prefix).strip()
         try:
             value = int(field)
         except ValueError as exc:
-            raise LaserProtocolError(
+            raise BigSkyYagProtocolError(
                 f"unexpected {command} response: {response!r}"
             ) from exc
         if value not in allowed:
-            raise LaserProtocolError(f"unexpected {command} response: {response!r}")
+            raise BigSkyYagProtocolError(f"unexpected {command} response: {response!r}")
         return value
 
     @property
@@ -440,5 +440,5 @@ def _parse_interlock_bits(response: str, allowed_prefixes: set[str]) -> str:
         or parts[0] not in allowed_prefixes
         or any(len(group) != 2 or set(group) - {"0", "1"} for group in parts[1:])
     ):
-        raise LaserProtocolError(f"unexpected interlock response: {response!r}")
+        raise BigSkyYagProtocolError(f"unexpected interlock response: {response!r}")
     return "".join(parts[1:])[::-1]

@@ -155,7 +155,7 @@ Planned correction:
 
 - Preserve the original arm failure, rollback command failures, and rollback
   verification failure, using an `ExceptionGroup` where appropriate.
-- Keep the high-level `LaserTransitionError` message concise while retaining all
+- Keep the high-level `BigSkyYagTransitionError` message concise while retaining all
   underlying causes.
 
 #### 8. Serial framing assumptions need explicit handling — **PARTIAL**
@@ -385,8 +385,9 @@ existing hardware-verification record.
 
 ### Protocol safety and internal behavior
 
-- [x] Introduce `BigSkyYagError`, `LaserProtocolError`, and the existing transition
-  error under a consistent hierarchy.
+- [x] Introduce a consistent `BigSkyYagError`, `BigSkyYagProtocolError`,
+  `BigSkyYagTransportError`, and `BigSkyYagTransitionError` hierarchy, with no
+  legacy aliases.
 - [x] Make unknown shutter, pump, mode, trigger, and boolean responses fail closed
   instead of silently producing a state. Exact accepted layouts should initially
   include only already observed responses.

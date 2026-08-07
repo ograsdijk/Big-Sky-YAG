@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from big_sky_yag import LaserProtocolError, QSwitchMode, Trigger
+from big_sky_yag import BigSkyYagProtocolError, QSwitchMode, Trigger
 from big_sky_yag.attributes import Flashlamp, FloatProperty, IntProperty, QSwitch
 
 
@@ -36,9 +36,9 @@ def test_properties_reject_short_or_non_numeric_fields() -> None:
     parent = FakeParent(["short", "freq.  xx.xx Hz"])
     flashlamp = Flashlamp(parent)
 
-    with pytest.raises(LaserProtocolError, match="unexpected V response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected V response"):
         _ = flashlamp.voltage
-    with pytest.raises(LaserProtocolError, match="unexpected F response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected F response"):
         _ = flashlamp.frequency
 
 
@@ -57,7 +57,7 @@ def test_int_property_validates_type_range_and_echo() -> None:
 
     with pytest.raises(ValueError, match="failed to set"):
         prop.__set__(parent, 900)
-    with pytest.raises(LaserProtocolError, match="write response"):
+    with pytest.raises(BigSkyYagProtocolError, match="write response"):
         prop.__set__(parent, 900)
     with pytest.raises(TypeError, match="not of type int"):
         prop.__set__(parent, True)
@@ -81,7 +81,7 @@ def test_float_property_scales_value_and_validates_echo() -> None:
 
     with pytest.raises(ValueError, match="failed to set"):
         prop.__set__(parent, 10.0)
-    with pytest.raises(LaserProtocolError, match="write response"):
+    with pytest.raises(BigSkyYagProtocolError, match="write response"):
         prop.__set__(parent, 10.0)
     with pytest.raises(TypeError, match="not of type float"):
         prop.__set__(parent, cast(float, 10))
@@ -107,7 +107,7 @@ def test_flashlamp_trigger_parses_known_modes(response: str, expected: Trigger) 
 
 @pytest.mark.parametrize("response", ["LP synch :  2", "wrong 0", "LP synch : x"])
 def test_flashlamp_trigger_rejects_unknown_response(response: str) -> None:
-    with pytest.raises(LaserProtocolError, match="unexpected LPM response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected LPM response"):
         _ = Flashlamp(FakeParent([response])).trigger
 
 
@@ -134,7 +134,7 @@ def test_qswitch_status_accepts_only_binary_state(
 
 @pytest.mark.parametrize("response", ["QS at run 2", "not a status", "QS at run on"])
 def test_qswitch_status_rejects_unknown_response(response: str) -> None:
-    with pytest.raises(LaserProtocolError, match="unexpected QOF response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected QOF response"):
         _ = QSwitch(FakeParent([response])).status
 
 
@@ -218,5 +218,5 @@ def test_qswitch_interlock_uses_second_snapshot_without_resolving_unknown_bits()
 def test_interlocks_reject_malformed_current_snapshot(response: str) -> None:
     parent = FakeParent(["IF1 00 00 00 00", response])
 
-    with pytest.raises(LaserProtocolError, match="unexpected interlock response"):
+    with pytest.raises(BigSkyYagProtocolError, match="unexpected interlock response"):
         _ = Flashlamp(parent).interlock

@@ -7,9 +7,13 @@ from typing import Protocol, cast
 import serial
 
 from .attributes import Flashlamp, FloatProperty, LaserStatus, QSwitch, Status, Trigger
-from .errors import LaserProtocolError, LaserTransitionError, LaserTransportError
+from .errors import (
+    BigSkyYagProtocolError,
+    BigSkyYagTransitionError,
+    BigSkyYagTransportError,
+)
 
-__all__ = ["BigSkyYag", "LaserTransitionError", "SerialInstrument"]
+__all__ = ["BigSkyYag", "BigSkyYagTransitionError", "SerialInstrument"]
 
 
 class Instrument(Protocol):
@@ -39,7 +43,7 @@ class SerialInstrument:
         # All device responses are exactly 17 bytes: \r\n + 15 bytes of data.
         response = cast(bytes, self._serial.read(17))
         if len(response) != 17:
-            raise LaserTransportError(
+            raise BigSkyYagTransportError(
                 "incomplete device response: expected 17 bytes, "
                 f"received {len(response)}"
             )
@@ -102,7 +106,7 @@ class BigSkyYag:
         try:
             message = self.instrument.read().decode(self._encoding)
         except UnicodeDecodeError as exc:
-            raise LaserTransportError("device response is not valid text") from exc
+            raise BigSkyYagTransportError("device response is not valid text") from exc
         return message.strip("\r\n")
 
     def close(self) -> None:
@@ -163,10 +167,10 @@ class BigSkyYag:
         response = self.query("SN")
         prefix = "s/number"
         if not response.casefold().startswith(prefix):
-            raise LaserProtocolError(f"unexpected SN response: {response!r}")
+            raise BigSkyYagProtocolError(f"unexpected SN response: {response!r}")
         value = response[len(prefix) :].strip()
         if not value:
-            raise LaserProtocolError(f"unexpected SN response: {response!r}")
+            raise BigSkyYagProtocolError(f"unexpected SN response: {response!r}")
         return value
 
     @property
@@ -182,7 +186,7 @@ class BigSkyYag:
             return True
         if response.strip() == "shutter closed":
             return False
-        raise LaserProtocolError(f"unexpected R response: {response!r}")
+        raise BigSkyYagProtocolError(f"unexpected R response: {response!r}")
 
     @shutter.setter
     def shutter(self, state: bool) -> None:
@@ -218,7 +222,7 @@ class BigSkyYag:
                 "1",
             }
         ):
-            raise LaserProtocolError(f"unexpected P response: {pump!r}")
+            raise BigSkyYagProtocolError(f"unexpected P response: {pump!r}")
         return tokens[2] == "1"
 
     @pump.setter
@@ -249,13 +253,13 @@ class BigSkyYag:
                 for index in (2, 4)
             )
         ):
-            raise LaserProtocolError(f"unexpected WOR response: {status_string!r}")
+            raise BigSkyYagProtocolError(f"unexpected WOR response: {status_string!r}")
         try:
             interlock, flashlamp, simmer, q_switch = (
                 int(tokens[index]) for index in (1, 3, 5, 7)
             )
         except ValueError as exc:
-            raise LaserProtocolError(
+            raise BigSkyYagProtocolError(
                 f"unexpected WOR response: {status_string!r}"
             ) from exc
         if (
@@ -264,7 +268,7 @@ class BigSkyYag:
             or flashlamp not in {0, 1, 2, 4, 5, 6}
             or q_switch not in {0, 1, 2, 4, 5, 6}
         ):
-            raise LaserProtocolError(f"unexpected WOR response: {status_string!r}")
+            raise BigSkyYagProtocolError(f"unexpected WOR response: {status_string!r}")
 
         flashlamp_state = Status(flashlamp if flashlamp < 4 else flashlamp - 4)
         qswitch_state = Status(q_switch if q_switch < 4 else q_switch - 4)
@@ -317,7 +321,7 @@ class BigSkyYag:
                     f"status={last_status!r}, shutter={last_shutter!r}, "
                     f"last_error={last_error!r}"
                 )
-                raise LaserTransitionError(
+                raise BigSkyYagTransitionError(
                     f"laser did not become {'armed' if running else 'disarmed'} "
                     f"within {timeout_s:g} s ({detail})"
                 ) from last_error
@@ -353,7 +357,7 @@ class BigSkyYag:
             try:
                 self.disarm(timeout_s=timeout_s, poll_s=poll_s)
             except Exception as rollback_error:
-                raise LaserTransitionError(
+                raise BigSkyYagTransitionError(
                     "laser arm failed and rollback could not verify a safe state"
                 ) from ExceptionGroup(
                     "laser arm and rollback failures", [arm_error, rollback_error]
@@ -388,7 +392,7 @@ class BigSkyYag:
             )
         except Exception as verification_error:
             if command_errors:
-                raise LaserTransitionError(
+                raise BigSkyYagTransitionError(
                     "laser disarm commands failed and safe state was not verified"
                 ) from ExceptionGroup(
                     "laser disarm failures", [*command_errors, verification_error]
