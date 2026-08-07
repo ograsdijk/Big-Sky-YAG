@@ -206,6 +206,16 @@ class LaserStatus:
         """Whether the controller reports continuous Q-switch operation."""
         return self.q_switch is Status.START
 
+    @property
+    def qswitch(self) -> Status:
+        """Alias for :attr:`q_switch`, matching the `yag.qswitch` device name."""
+        return self.q_switch
+
+    @property
+    def qswitch_synchronization(self) -> Trigger:
+        """Alias for :attr:`q_switch_synchronization`."""
+        return self.q_switch_synchronization
+
 
 class Flashlamp:
     voltage = IntProperty(
@@ -386,7 +396,7 @@ class QSwitch:
     counter = IntProperty(
         name="shot counter", command="CQ", ret_string="ct QS ---------"
     )
-    counter_user = IntProperty(
+    user_counter = IntProperty(
         name="user shot counter", command="UCQ", ret_string="cu QS ---------"
     )
     delay = IntProperty(
@@ -461,7 +471,7 @@ class QSwitch:
         state = dict((i.name, bool(iq.get_bit(i))) for i in QSwitchInterlock)
         return QSwitchInterlockState(**state)
 
-    def counter_user_reset(self) -> None:
+    def user_counter_reset(self) -> None:
         """Reset the Q-switch user shot counter (`UCQ0`)."""
         self.write("UCQ0")
 

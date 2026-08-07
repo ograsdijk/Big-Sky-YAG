@@ -444,6 +444,9 @@ def test_laser_status_decodes_external_running_state() -> None:
     assert status.q_switch is Status.START
     assert status.qswitch_running is True
     assert status.q_switch_synchronization is Trigger.EXTERNAL
+    # qswitch/qswitch_synchronization are aliases matching the yag.qswitch name.
+    assert status.qswitch is status.q_switch
+    assert status.qswitch_synchronization is status.q_switch_synchronization
 
 
 @pytest.mark.parametrize("code", [0, 1, 2, 4, 5, 6])

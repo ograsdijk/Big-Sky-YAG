@@ -147,8 +147,8 @@ yag.flashlamp.user_counter_reset()
 yag.flashlamp.save_user_counter()
 
 qswitch_total = yag.qswitch.counter
-qswitch_user = yag.qswitch.counter_user
-yag.qswitch.counter_user_reset()
+qswitch_user = yag.qswitch.user_counter
+yag.qswitch.user_counter_reset()
 
 yag.qswitch.single()
 ```

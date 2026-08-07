@@ -190,11 +190,14 @@ def test_new_read_descriptors_parse_captured_templates() -> None:
     assert flashlamp.enable_fire_interval == 0.0
 
     qswitch = QSwitch(
-        FakeParent(["dly QS m 100 uS", "dly QS M 500 uS", "QS wait :   000"])
+        FakeParent(
+            ["dly QS m 100 uS", "dly QS M 500 uS", "QS wait :   000", "cu QS 000012345"]
+        )
     )
     assert qswitch.delay_min == 100
     assert qswitch.delay_max == 500
     assert qswitch.pulses_wait == 0
+    assert qswitch.user_counter == 12345
 
 
 def test_new_setters_emit_commands_and_verify_echo() -> None:
@@ -227,7 +230,7 @@ def test_factory_delay_limit_setters_reject_out_of_range(value: int) -> None:
 
 def test_counter_maintenance_methods_emit_documented_commands() -> None:
     parent = FakeParent(["ok", "ok"])
-    QSwitch(parent).counter_user_reset()
+    QSwitch(parent).user_counter_reset()
     Flashlamp(parent).save_user_counter()
 
     assert parent.messages == ["UCQ0", "SUC"]

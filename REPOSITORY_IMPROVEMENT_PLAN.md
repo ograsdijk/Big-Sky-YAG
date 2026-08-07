@@ -383,7 +383,7 @@ based on responses captured from the real controller (2026-08-07, SN 062):
   (`flashlamp.idle_fire_interval`), `E` (`flashlamp.enable_fire_interval`), `WMN`
   (`qswitch.delay_min`), `WMX` (`qswitch.delay_max`), `IHG` (`hg_temperature_ok`).
 - Writes: `ROF<n>`, `D<n>`, `E<n>`, `WMN<delay>`, `WMX<delay>`, writable
-  `QSW<n>` (`qswitch.pulses_wait`), `UCQ0` (`qswitch.counter_user_reset`), `SUC`
+  `QSW<n>` (`qswitch.pulses_wait`), `UCQ0` (`qswitch.user_counter_reset`), `SUC`
   (`flashlamp.save_user_counter`), and `ECH1/ECH0` via `set_echo`.
 
 Safety handling applied:
@@ -400,7 +400,7 @@ Safety handling applied:
 
 ### P3: Package and API polish
 
-#### 19. Public exports and naming are inconsistent — **PARTIAL**
+#### 19. Public exports and naming are inconsistent — **FIXED**
 
 Planned correction:
 
@@ -417,8 +417,11 @@ Planned correction:
 Completed: supported enums, status models, interlock models, errors, and the serial
 transport are exported consistently; snapshot dataclasses are immutable; `port`
 is canonical while `resource_name` remains compatible; and injected instruments
-need no dummy port. Remaining optional naming aliases are compatibility
-enhancements rather than correctness blockers.
+need no dummy port. Naming is now reconciled: `LaserStatus` exposes `qswitch` /
+`qswitch_synchronization` aliases matching the `yag.qswitch` device name (the
+`q_switch*` fields remain), and the Q-switch user counter was renamed to
+`user_counter` / `user_counter_reset()` to match the flashlamp (the old
+`counter_user` / `counter_user_reset()` names were removed, no alias).
 
 #### 20. Packaging metadata is minimal — **FIXED**
 
@@ -579,7 +582,14 @@ Exit criteria:
 - Owned serial resources close deterministically.
 - Transport failures are distinct from protocol-content failures.
 
-### Phase 5: Hardware verification checkpoint — **PENDING DEVICE**
+### Phase 5: Hardware verification checkpoint — **COMPLETED (one bit device-gated)**
+
+Completed 2026-08-07 against the real controller (SN 062) plus an isolator-gated
+firing test. Addressing (`$xxx`), `WOR` labels (`I/F/S/Q`), `SN` capitalization,
+reply framing (17 bytes, including active `PQ`/`OQ`), the `IF.` interlock prefix,
+and the `IQ` bit mapping (`0/1/6`) are all resolved and annotated in the command
+reference. The only item still device-gated is the water-temperature `IQ` bit,
+which needs a real thermal-interlock fault to assert and was not forced.
 
 1. Collect the required raw captures.
 2. Add sanitized capture fixtures to tests where appropriate.
