@@ -468,8 +468,8 @@ class BigSkyYag:
         poll_s = self._validate_transition_time("poll_s", poll_s, allow_zero=False)
         try:
             self.flashlamp.activate()
-            self.qswitch.start()
             self.shutter = True
+            self.qswitch.start()
             self._wait_for_operational_state(
                 running=True, timeout_s=timeout_s, poll_s=poll_s
             )
