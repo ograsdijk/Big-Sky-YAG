@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class FlashlampInterlockState:
     WATER_FLOW: bool
     WATER_LEVEL: bool
@@ -30,7 +30,7 @@ class FlashlampInterlock2(IntEnum):
     WATER_TEMP = 5
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class QSwitchInterlockState:
     EMISSION_INHIBITED: bool
     WATER_TEMP: bool

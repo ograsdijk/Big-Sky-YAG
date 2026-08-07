@@ -4,9 +4,6 @@ on:
   release:
     types:
       - published
-  push:
-    tags:
-      - "v*"
 
 jobs:
   publish:
@@ -30,8 +27,29 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Typecheck
+        run: uv run mypy
+
+      - name: Test
+        run: uv run pytest
+
       - name: Build
         run: uv build
+
+      - name: Check distributions
+        run: uv run twine check dist/*
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
