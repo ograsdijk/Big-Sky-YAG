@@ -53,3 +53,9 @@ jobs:
 
       - name: Build
         run: uv build
+
+      - name: Check distributions
+        run: uv run twine check dist/*
+
+      - name: Check typed-package marker
+        run: python -c "import zipfile, glob; wheel=glob.glob('dist/*.whl')[0]; assert any(name.endswith('/py.typed') for name in zipfile.ZipFile(wheel).namelist())"
