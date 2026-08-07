@@ -77,7 +77,9 @@ pending captures and surfaced two protocol defects that were then fixed:
   requires the Q-switch `Start` only under internal synchronization; under
   external synchronization it verifies the flashlamp `Start` and open shutter
   (the positively confirmable signals) and does not demand the unreachable
-  Q-switch `Start`. Disarm still confirms the stopped state in both modes.
+  Q-switch `Start`. Hardware operation requires the arming sequence to start the
+  flashlamp, open the shutter, and only then start the Q-switch. Disarm still
+  confirms the stopped state in both modes.
 
 A follow-up firing test (2026-08-07, isolator-gated) resolved the last two items:
 

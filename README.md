@@ -45,12 +45,12 @@ with BigSkyYag("COM4") as yag:
     print(yag.qswitch.interlock)
 
     try:
-        # arm() starts the flashlamp and Q-switch and opens the shutter, then
-        # verifies the flashlamp Start and open shutter. It also verifies the
-        # Q-switch Start under internal synchronization; an externally-triggered
-        # Q-switch idles awaiting triggers and never reports Start, so that check
-        # is skipped in external mode. It does not start the pump or independently
-        # decide whether every site-specific operating prerequisite is satisfied.
+        # arm() starts the flashlamp, opens the shutter, and then starts the
+        # Q-switch before verifying the flashlamp Start and open shutter. It also
+        # verifies Q-switch Start under internal synchronization; an externally-
+        # triggered Q-switch idles awaiting triggers and never reports Start, so
+        # that check is skipped in external mode. It does not start the pump or
+        # independently decide whether every site-specific prerequisite is met.
         yag.arm(timeout_s=2.0)
 
         # Perform the experiment here.

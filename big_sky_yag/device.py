@@ -453,7 +453,7 @@ class BigSkyYag:
         return parsed
 
     def arm(self, *, timeout_s: float = 2.0, poll_s: float = 0.1) -> None:
-        """Start flashlamp and Q-switch, then open and verify the shutter.
+        """Start the flashlamp, open the shutter, then start the Q-switch and verify.
 
         Verification requires the flashlamp to report continuous ``Start`` and
         the shutter to report open. The Q-switch is also required to report

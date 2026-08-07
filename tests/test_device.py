@@ -492,7 +492,7 @@ def test_arm_starts_and_verifies_complete_operational_state() -> None:
     assert instrument.flashlamp is Status.START
     assert instrument.qswitch is Status.START
     assert instrument.shutter is True
-    assert instrument.messages == [">A", ">PQ", ">R1", ">WOR", ">R"]
+    assert instrument.messages == [">A", ">R1", ">PQ", ">WOR", ">R"]
 
 
 def test_arm_succeeds_with_externally_triggered_qswitch() -> None:
@@ -506,7 +506,7 @@ def test_arm_succeeds_with_externally_triggered_qswitch() -> None:
     assert instrument.flashlamp is Status.START
     assert instrument.qswitch is Status.STOP
     assert instrument.shutter is True
-    assert instrument.messages == [">A", ">PQ", ">R1", ">WOR", ">R"]
+    assert instrument.messages == [">A", ">R1", ">PQ", ">WOR", ">R"]
 
 
 def test_disarm_stops_and_verifies_complete_safe_state() -> None:
