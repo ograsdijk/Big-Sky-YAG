@@ -67,26 +67,32 @@ class BigSkyYag:
 
     def __init__(
         self,
-        resource_name: str,
+        port: str | None = None,
         baud_rate: int = 9600,
         serial_number: int | None = None,
         instrument: Instrument | None = None,
         timeout: float | None = 2.0,
         write_timeout: float | None = 2.0,
         encoding: str = "ascii",
+        *,
+        resource_name: str | None = None,
     ) -> None:
+        if port is not None and resource_name is not None:
+            raise ValueError("specify either port or resource_name, not both")
+        resolved_port = port if port is not None else resource_name
         self._owns_instrument = instrument is None
-        self.instrument = (
-            instrument
-            if instrument is not None
-            else SerialInstrument(
-                port=resource_name,
+        if instrument is None:
+            if resolved_port is None:
+                raise ValueError("port is required when instrument is not provided")
+            self.instrument: Instrument = SerialInstrument(
+                port=resolved_port,
                 baud_rate=baud_rate,
                 timeout=timeout,
                 write_timeout=write_timeout,
                 encoding=encoding,
             )
-        )
+        else:
+            self.instrument = instrument
         self._encoding = encoding
         self._serial_number = serial_number
         self.flashlamp = Flashlamp(self)

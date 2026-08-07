@@ -90,6 +90,39 @@ def test_query_prefixes_command_without_serial_number() -> None:
     assert instrument.messages == [">SN"]
 
 
+def test_port_and_resource_name_are_compatible_construction_forms() -> None:
+    canonical = FakeInstrument([b"ok\r\n"])
+    legacy = FakeInstrument([b"ok\r\n"])
+
+    BigSkyYag(port="COM4", instrument=canonical).query("X")
+    BigSkyYag(resource_name="COM4", instrument=legacy).query("X")
+
+    assert canonical.messages == [">X"]
+    assert legacy.messages == [">X"]
+
+
+def test_injected_instrument_does_not_require_port() -> None:
+    instrument = FakeInstrument([b"ok\r\n"])
+
+    response = BigSkyYag(instrument=instrument).query("X")
+
+    assert response == "ok"
+
+
+def test_port_and_resource_name_cannot_both_be_supplied() -> None:
+    with pytest.raises(ValueError, match="either port or resource_name"):
+        BigSkyYag(
+            port="COM4",
+            resource_name="COM5",
+            instrument=FakeInstrument([]),
+        )
+
+
+def test_port_is_required_without_an_injected_instrument() -> None:
+    with pytest.raises(ValueError, match="port is required"):
+        BigSkyYag()
+
+
 def test_existing_numbered_address_format_is_preserved_pending_verification() -> None:
     instrument = FakeInstrument([b"CG pump       1\r\n"])
     yag = BigSkyYag("COM4", serial_number=42, instrument=instrument)

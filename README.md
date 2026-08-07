@@ -19,7 +19,10 @@ pip install big-sky-yag
 ## Basic operation
 
 The controller uses a serial connection. The defaults are 9600 baud with two-second
-read and write timeouts.
+read and write timeouts. `port` is the canonical PySerial parameter name, so the
+positional `BigSkyYag("COM4")` form is equivalent to
+`BigSkyYag(port="COM4")`. The former `resource_name="COM4"` keyword remains
+available as a compatibility alias.
 
 ```python
 import time
@@ -58,6 +61,26 @@ with BigSkyYag("COM4") as yag:
 The context manager closes serial connections created by `BigSkyYag`. When an
 instrument is injected for testing or integration, its owner remains responsible
 for closing it.
+
+You can also construct the device explicitly, as in earlier releases. Call
+`close()` when finished so the serial port is released:
+
+```python
+from big_sky_yag import BigSkyYag
+
+yag = BigSkyYag("COM4")
+try:
+    print(yag.laser_status)
+    # Configure and operate the laser here.
+finally:
+    yag.close()
+```
+
+Test and integration transports can be injected without supplying a dummy port:
+
+```python
+yag = BigSkyYag(instrument=my_instrument)
+```
 
 ## Trigger and firing modes
 

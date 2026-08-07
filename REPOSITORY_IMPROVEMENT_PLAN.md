@@ -41,6 +41,8 @@ The device-independent work in this plan has been implemented:
 - Descriptors and the full package pass strict typing without production ignores.
 - Serial cleanup, context-manager support, encoding handling, and incomplete-read
   errors are implemented.
+- `port` is the canonical connection parameter, `resource_name` remains a
+  compatibility alias, and injected instruments no longer require a dummy port.
 - Device-independent parser, descriptor, transport, bit-field, interlock, and
   transition tests are in place.
 - README, package metadata, CI, publishing, and the manual-versus-firmware notes
@@ -357,11 +359,14 @@ Planned correction:
 - Reconcile names such as `q_switch` versus `qswitch` and `counter_user` versus
   `user_counter`, preserving compatibility aliases or using a deprecation cycle.
 - Consider frozen status dataclasses because they represent snapshots.
-- Consider making `resource_name` optional when an injected instrument is given.
+- Use the PySerial term `port`, retain `resource_name` as a compatibility alias,
+  reject ambiguous use of both, and allow instrument injection without a dummy
+  port.
 
 Completed: supported enums, status models, interlock models, errors, and the serial
-transport are exported consistently; snapshot dataclasses are immutable. Remaining:
-optional naming aliases and optional `resource_name` ergonomics are compatibility
+transport are exported consistently; snapshot dataclasses are immutable; `port`
+is canonical while `resource_name` remains compatible; and injected instruments
+need no dummy port. Remaining optional naming aliases are compatibility
 enhancements rather than correctness blockers.
 
 #### 20. Packaging metadata is minimal — **FIXED**
