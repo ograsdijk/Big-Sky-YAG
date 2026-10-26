@@ -25,7 +25,8 @@ because it was extracted from the PDF. Evidence should be ranked as follows:
 - `uv run pytest`: 81 tests pass with 95%+ statement coverage.
 - `uv run ruff check .`: passes.
 - Configured strict `uv run mypy`: passes across `big_sky_yag` and `tests`.
-- `uv build` and `twine check` pass, and the wheel contains `py.typed`.
+- `uv build` passes, and the wheel contains `py.typed`. The publishing action
+  validates distribution metadata before uploading.
 - The working command names, scaling rules, and ranges largely agree with the
   command reference.
 
@@ -314,7 +315,7 @@ Planned correction:
 - Run the expanded protocol and transition test suite on all supported Python
   versions.
 - Build both wheel and source distribution.
-- Validate distributions with `twine check`.
+- Validate distribution metadata through the PyPI publishing action.
 - Confirm that `py.typed` is included in the wheel.
 
 #### 15. Publishing can attempt the same release twice — **FIXED**
@@ -645,7 +646,6 @@ uv run ruff check .
 uv run mypy
 uv run pytest
 uv build
-uv run --with twine twine check dist/*
 ```
 
 During the typing phase, also run the explicit full-package command until the
