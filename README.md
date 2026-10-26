@@ -203,7 +203,8 @@ uv run ruff check .
 uv run mypy
 uv run pytest
 uv build
-uv run twine check dist/*
 ```
 
 The test suite uses simulated transports and does not require laser hardware.
+The PyPI publishing action validates distribution metadata before uploading, so
+Twine is not required in the development environment.
